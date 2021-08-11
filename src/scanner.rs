@@ -1,13 +1,14 @@
+use std::process::exit;
+use crate::scanner::TokenType::IDENTIFIER;
+
 #[allow(dead_code)]
 #[allow(unused_variables)]
 #[allow(non_camel_case_types)]
-
 #[derive(PartialEq, PartialOrd, Clone, Debug)]
-pub enum TokenTypes {
+pub enum TokenType {
     PLUS,
     MINUS,
     MULT,
-    DIV,
     LPAREN,
     RPAREN,
     LBRACE,
@@ -31,14 +32,20 @@ pub enum TokenTypes {
 
 #[derive(Debug, Clone)]
 pub struct Token {
-    token: TokenTypes,
+    token: TokenType,
     lexeme: String,
     line: usize,
 }
 
 impl Token {
-    fn new(token: TokenTypes, lexeme: String, line: usize) -> Token {
+    fn new(token: TokenType, lexeme: String, line: usize) -> Token {
         Token { token, lexeme, line }
+    }
+}
+
+impl PartialEq<Token> for TokenType {
+    fn eq(&self, other: &Token) -> bool {
+        other.token == *self
     }
 }
 
@@ -71,7 +78,7 @@ impl Scanner {
         self.current += 1;
         x
     }
-    fn add_token(&mut self, tt: TokenTypes) {
+    fn add_token(&mut self, tt: TokenType) {
         self.tokens.push(
             Token::new(
                 tt,
@@ -79,47 +86,86 @@ impl Scanner {
                 self.line)
         );
     }
+    fn string(&mut self) {
+        while self.peek() != '"' && !self.is_at_end() {
+            if self.peek() == '\n' { self.line += 1; }
+            self.advance();
+        }
+        if self.is_at_end() {
+            eprintln!("Unterminated String\n");
+            exit(-1);
+        }
+        self.advance();
+        self.add_token(
+            TokenType::STRING(
+                self.src.chars().skip(self.start + 1).take(self.current - self.start - 2).collect::<String>()));
+    }
+    fn number(&mut self) {
+        while self.peek().is_digit(10) { self.advance(); }
+        if self.peek() == '.' && self.peek_next().is_digit(10) {
+            self.advance();
+        }
+        while self.peek().is_digit(10) { self.advance(); }
+        self.add_token(TokenType::NUMBER(
+            self.src.chars().skip(self.start).take(self.current - self.start).collect::<String>()
+                .parse::<f64>().unwrap()))
+    }
+    fn identifier(&mut self) {
+        while self.peek().is_alphanumeric() { self.advance(); }
+        self.add_token(
+            TokenType::IDENTIFIER(
+                self.src.chars().skip(self.start).take(self.current - self.start).collect::<String>()))
+    }
     fn peek(&mut self) -> char {
-        self.src.chars().nth(self.current).unwrap()
+        match self.src.chars().nth(self.current) {
+            None => 0x0 as char,
+            Some(c) => c,
+        }
+    }
+    fn peek_next(&self) -> char {
+        match self.src.chars().nth(self.current + 1) {
+            None => 0x0 as char,
+            Some(c) => c,
+        }
     }
     fn scan_token(&mut self) {
         let c = self.advance();
         match c {
-            '(' => self.add_token(TokenTypes::LPAREN),
-            ')' => self.add_token(TokenTypes::RPAREN),
-            '{' => self.add_token(TokenTypes::LBRACE),
-            '}' => self.add_token(TokenTypes::RBRACE),
-            ',' => self.add_token(TokenTypes::COMMA),
-            '.' => self.add_token(TokenTypes::DOT),
-            '-' => self.add_token(TokenTypes::MINUS),
-            '+' => self.add_token(TokenTypes::PLUS),
-            ';' => self.add_token(TokenTypes::SEMICOLON),
-            '*' => self.add_token(TokenTypes::MULT),
+            '(' => self.add_token(TokenType::LPAREN),
+            ')' => self.add_token(TokenType::RPAREN),
+            '{' => self.add_token(TokenType::LBRACE),
+            '}' => self.add_token(TokenType::RBRACE),
+            ',' => self.add_token(TokenType::COMMA),
+            '.' => self.add_token(TokenType::DOT),
+            '-' => self.add_token(TokenType::MINUS),
+            '+' => self.add_token(TokenType::PLUS),
+            ';' => self.add_token(TokenType::SEMICOLON),
+            '*' => self.add_token(TokenType::MULT),
             '!' => {
                 let tt = match self.matches('=') {
-                    true => TokenTypes::BANG_EQUAL,
-                    false => TokenTypes::BANG,
+                    true => TokenType::BANG_EQUAL,
+                    false => TokenType::BANG,
                 };
                 self.add_token(tt);
             }
             '=' => {
                 let tt = match self.matches('=') {
-                    true => TokenTypes::EQUAL_EQUAL,
-                    false => TokenTypes::EQUAL
+                    true => TokenType::EQUAL_EQUAL,
+                    false => TokenType::EQUAL
                 };
                 self.add_token(tt)
             }
             '<' => {
                 let tt = match self.matches('=') {
-                    true => TokenTypes::LESS_EQUAL,
-                    false => TokenTypes::LESS
+                    true => TokenType::LESS_EQUAL,
+                    false => TokenType::LESS
                 };
                 self.add_token(tt)
             }
             '>' => {
                 let tt = match self.matches('=') {
-                    true => TokenTypes::GREATER_EQUAL,
-                    false => TokenTypes::GREATER
+                    true => TokenType::GREATER_EQUAL,
+                    false => TokenType::GREATER
                 };
                 self.add_token(tt)
             }
@@ -129,15 +175,18 @@ impl Scanner {
                         self.advance();
                     }
                 } else {
-                    self.add_token(TokenTypes::SLASH);
+                    self.add_token(TokenType::SLASH);
                 }
             }
-            ' ' => return,
-            '\r' => return,
-            '\t' => return,
-            '\n' => self.line += 1,
+            '"' => self.string(),
             _ => {
-                eprintln!("Line {} unexpeted token `{}`", self.line, c);
+                if c.is_digit(10) {
+                    self.number();
+                } else if c.is_alphabetic() {
+                    self.identifier()
+                } else {
+                    eprintln!("Line {} unexpeted token `{}`", self.line, c);
+                }
             }
         }
     }
@@ -160,6 +209,32 @@ impl Scanner {
 }
 
 #[test]
-fn test() {
-    assert_eq!(vec![TokenTypes::EQUAL], lex(String::from("=")))
+fn test_basic_lexemes() {
+    type TT = TokenType;
+    assert_eq!(vec![TT::EQUAL], scanner(String::from("=")));
+    assert_eq!(vec![TT::BANG_EQUAL], scanner(String::from("!=")));
+    assert_eq!(vec![TT::BANG_EQUAL, TT::EQUAL_EQUAL], scanner(String::from("!===")));
+    assert_eq!(vec![TT::PLUS, TT::MINUS, TT::SLASH, TT::DOT, TT::MULT], scanner(String::from("+-/.*")));
+    assert_eq!(vec![TT::LPAREN, TT::RPAREN], scanner(String::from("()")));
+    assert_eq!(vec![TT::LESS, TT::LESS_EQUAL], scanner(String::from("<<=")));
+    assert_eq!(vec![TT::GREATER, TT::GREATER_EQUAL], scanner(String::from(">>=")));
+    assert_eq!(vec![TT::GREATER, TT::GREATER_EQUAL], scanner(String::from("\r\n\t>>=")));
+}
+
+#[test]
+fn test_identifiers() {
+    type TT = TokenType;
+    assert_eq!(vec![TT::STRING(String::from("Cat")), TT::STRING(String::from("HAT"))], scanner(String::from("\"Cat\" \"HAT\"")));
+    assert_eq!(vec![TT::STRING(String::from("Helloßßßßß"))], scanner(String::from("\"Helloßßßßß\"")));
+    assert_eq!(vec![TT::STRING(String::from("Hello")), TT::GREATER], scanner(String::from("\"Hello\" >")));
+    assert_eq!(vec![TT::STRING(String::from(""))], scanner(String::from("   \t\r\n\"\" ")));
+}
+
+#[test]
+fn test_numbers() {
+    type TT = TokenType;
+    assert_eq!(vec![TT::NUMBER(123.0)], scanner(String::from("123")));
+    assert_eq!(vec![TT::NUMBER(123.34)], scanner(String::from("123.34")));
+    assert_eq!(vec![TT::MINUS, TT::NUMBER(123.0)], scanner(String::from("-123.0")));
+    assert_eq!(vec![TT::NUMBER(0.0)], scanner(String::from("0.0")));
 }
