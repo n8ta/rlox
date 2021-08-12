@@ -1,5 +1,27 @@
-use std::process::exit;
-use crate::scanner::TokenType::IDENTIFIER;
+use std::collections::HashMap;
+use std::num::ParseFloatError;
+
+lazy_static! {
+    static ref KEYWORDS: HashMap<String, TokenType> = {
+        let mut map: HashMap<String, TokenType> = HashMap::default();
+        map.insert(String::from("and"), TokenType::AND);
+        map.insert(String::from("else"), TokenType::ELSE);
+        map.insert(String::from("false"), TokenType::FALSE);
+        map.insert(String::from("for"), TokenType::FOR);
+        map.insert(String::from("fun"), TokenType::FUN);
+        map.insert(String::from("if"), TokenType::IF);
+        map.insert(String::from("nil"), TokenType::NIL);
+        map.insert(String::from("or"), TokenType::OR);
+        map.insert(String::from("print"), TokenType::PRINT);
+        map.insert(String::from("return"), TokenType::RETURN);
+        map.insert(String::from("super"), TokenType::SUPER);
+        map.insert(String::from("this"), TokenType::THIS);
+        map.insert(String::from("true"), TokenType::TRUE);
+        map.insert(String::from("var"), TokenType::VAR);
+        map.insert(String::from("while"), TokenType::WHILE);
+        map
+    };
+}
 
 #[allow(dead_code)]
 #[allow(unused_variables)]
@@ -19,7 +41,7 @@ pub enum TokenType {
     BANG,
     STRING(String),
     NUMBER(f64),
-    IDENTIFIER(String),
+    IDENTIFIER,
     SEMICOLON,
     COMMA,
     DOT,
@@ -28,6 +50,21 @@ pub enum TokenType {
     GREATER_EQUAL,
     LESS,
     LESS_EQUAL,
+    AND,
+    ELSE,
+    FALSE,
+    FOR,
+    FUN,
+    IF,
+    NIL,
+    OR,
+    PRINT,
+    RETURN,
+    SUPER,
+    THIS,
+    TRUE,
+    VAR,
+    WHILE,
 }
 
 #[derive(Debug, Clone)]
@@ -36,6 +73,8 @@ pub struct Token {
     lexeme: String,
     line: usize,
 }
+
+type ScannerResult = Result<Vec<Token>, (String, usize)>;
 
 impl Token {
     fn new(token: TokenType, lexeme: String, line: usize) -> Token {
@@ -55,7 +94,7 @@ impl PartialEq for Token {
     }
 }
 
-pub fn scanner(src: String) -> Vec<Token> {
+pub fn scanner(src: String) -> ScannerResult {
     let mut scanner = Scanner::new(src);
     scanner.scan_tokens()
 }
@@ -86,35 +125,42 @@ impl Scanner {
                 self.line)
         );
     }
-    fn string(&mut self) {
+    fn string(&mut self) -> Result<(), String> {
         while self.peek() != '"' && !self.is_at_end() {
             if self.peek() == '\n' { self.line += 1; }
             self.advance();
         }
         if self.is_at_end() {
-            eprintln!("Unterminated String\n");
-            exit(-1);
+            let partial_str = self.src.chars().skip(self.start).take(self.src.len()-self.start).collect::<String>();
+            return Err(format!("Unterminated String: {}", partial_str));
         }
         self.advance();
         self.add_token(
             TokenType::STRING(
                 self.src.chars().skip(self.start + 1).take(self.current - self.start - 2).collect::<String>()));
+        return Ok(());
     }
-    fn number(&mut self) {
+    fn number(&mut self) -> Result<(), String> {
         while self.peek().is_digit(10) { self.advance(); }
         if self.peek() == '.' && self.peek_next().is_digit(10) {
             self.advance();
         }
         while self.peek().is_digit(10) { self.advance(); }
-        self.add_token(TokenType::NUMBER(
-            self.src.chars().skip(self.start).take(self.current - self.start).collect::<String>()
-                .parse::<f64>().unwrap()))
+
+        let num = self.src.chars().skip(self.start).take(self.current - self.start).collect::<String>();
+        let float = match num.parse::<f64>() {
+            Ok(float) => float,
+            Err(_) => {
+                return Err(String::from("Unable to parse f64 {}"));
+            }
+        };
+        self.add_token(TokenType::NUMBER(float));
+        Ok(())
     }
     fn identifier(&mut self) {
         while self.peek().is_alphanumeric() { self.advance(); }
-        self.add_token(
-            TokenType::IDENTIFIER(
-                self.src.chars().skip(self.start).take(self.current - self.start).collect::<String>()))
+        let ident = self.src.chars().skip(self.start).take(self.current - self.start).collect::<String>();
+        self.add_token(KEYWORDS.get(&ident).unwrap().clone());
     }
     fn peek(&mut self) -> char {
         match self.src.chars().nth(self.current) {
@@ -128,7 +174,7 @@ impl Scanner {
             Some(c) => c,
         }
     }
-    fn scan_token(&mut self) {
+    fn scan_token(&mut self) -> Result<(), String> {
         let c = self.advance();
         match c {
             '(' => self.add_token(TokenType::LPAREN),
@@ -178,17 +224,22 @@ impl Scanner {
                     self.add_token(TokenType::SLASH);
                 }
             }
-            '"' => self.string(),
+            '"' => self.string()?,
+            '\r' => (),
+            '\t' => (),
+            ' ' => (),
+            '\n' => self.line += 1,
             _ => {
                 if c.is_digit(10) {
-                    self.number();
+                    self.number()?;
                 } else if c.is_alphabetic() {
                     self.identifier()
                 } else {
-                    eprintln!("Line {} unexpeted token `{}`", self.line, c);
+                    return Err(format!("Unexpected token `{}`", c));
                 }
             }
         }
+        Ok(())
     }
 
     fn matches(&mut self, expected: char) -> bool {
@@ -198,43 +249,51 @@ impl Scanner {
         true
     }
 
-    fn scan_tokens(&mut self) -> Vec<Token> {
-        let size = self.src.chars().count();
+    fn scan_tokens(&mut self) -> ScannerResult {
         while !self.is_at_end() {
-            self.scan_token();
+            if let Err(x) = self.scan_token() {
+                return Err((x, self.line));
+            }
             self.start = self.current;
         }
-        self.tokens.clone()
+        Ok(self.tokens.clone())
     }
 }
+
+// Unwraps for easy tests
+fn test_scanner(src: String) -> Vec<Token> {
+    let mut scanner = Scanner::new(src);
+    scanner.scan_tokens().unwrap()
+}
+
 
 #[test]
 fn test_basic_lexemes() {
     type TT = TokenType;
-    assert_eq!(vec![TT::EQUAL], scanner(String::from("=")));
-    assert_eq!(vec![TT::BANG_EQUAL], scanner(String::from("!=")));
-    assert_eq!(vec![TT::BANG_EQUAL, TT::EQUAL_EQUAL], scanner(String::from("!===")));
-    assert_eq!(vec![TT::PLUS, TT::MINUS, TT::SLASH, TT::DOT, TT::MULT], scanner(String::from("+-/.*")));
-    assert_eq!(vec![TT::LPAREN, TT::RPAREN], scanner(String::from("()")));
-    assert_eq!(vec![TT::LESS, TT::LESS_EQUAL], scanner(String::from("<<=")));
-    assert_eq!(vec![TT::GREATER, TT::GREATER_EQUAL], scanner(String::from(">>=")));
-    assert_eq!(vec![TT::GREATER, TT::GREATER_EQUAL], scanner(String::from("\r\n\t>>=")));
+    assert_eq!(vec![TT::EQUAL], test_scanner(String::from("=")));
+    assert_eq!(vec![TT::BANG_EQUAL], test_scanner(String::from("!=")));
+    assert_eq!(vec![TT::BANG_EQUAL, TT::EQUAL_EQUAL], test_scanner(String::from("!===")));
+    assert_eq!(vec![TT::PLUS, TT::MINUS, TT::SLASH, TT::DOT, TT::MULT], test_scanner(String::from("+-/.*")));
+    assert_eq!(vec![TT::LPAREN, TT::RPAREN], test_scanner(String::from("()")));
+    assert_eq!(vec![TT::LESS, TT::LESS_EQUAL], test_scanner(String::from("<<=")));
+    assert_eq!(vec![TT::GREATER, TT::GREATER_EQUAL], test_scanner(String::from(">>=")));
+    assert_eq!(vec![TT::GREATER, TT::GREATER_EQUAL], test_scanner(String::from("\r\n\t>>=")));
 }
 
 #[test]
-fn test_identifiers() {
+fn test_strings() {
     type TT = TokenType;
-    assert_eq!(vec![TT::STRING(String::from("Cat")), TT::STRING(String::from("HAT"))], scanner(String::from("\"Cat\" \"HAT\"")));
-    assert_eq!(vec![TT::STRING(String::from("Helloßßßßß"))], scanner(String::from("\"Helloßßßßß\"")));
-    assert_eq!(vec![TT::STRING(String::from("Hello")), TT::GREATER], scanner(String::from("\"Hello\" >")));
-    assert_eq!(vec![TT::STRING(String::from(""))], scanner(String::from("   \t\r\n\"\" ")));
+    assert_eq!(vec![TT::STRING(String::from("Cat")), TT::STRING(String::from("HAT"))], test_scanner(String::from("\"Cat\" \"HAT\"")));
+    assert_eq!(vec![TT::STRING(String::from("Helloßßßßß"))], test_scanner(String::from("\"Helloßßßßß\"")));
+    assert_eq!(vec![TT::STRING(String::from("Hello")), TT::GREATER], test_scanner(String::from("\"Hello\" >")));
+    assert_eq!(vec![TT::STRING(String::from(""))], test_scanner(String::from("   \t\r\n\"\" ")));
 }
 
 #[test]
 fn test_numbers() {
     type TT = TokenType;
-    assert_eq!(vec![TT::NUMBER(123.0)], scanner(String::from("123")));
-    assert_eq!(vec![TT::NUMBER(123.34)], scanner(String::from("123.34")));
-    assert_eq!(vec![TT::MINUS, TT::NUMBER(123.0)], scanner(String::from("-123.0")));
-    assert_eq!(vec![TT::NUMBER(0.0)], scanner(String::from("0.0")));
+    assert_eq!(vec![TT::NUMBER(123.0)], test_scanner(String::from("123")));
+    assert_eq!(vec![TT::NUMBER(123.34)], test_scanner(String::from("123.34")));
+    assert_eq!(vec![TT::MINUS, TT::NUMBER(123.0)], test_scanner(String::from("-123.0")));
+    assert_eq!(vec![TT::NUMBER(0.0)], test_scanner(String::from("0.0")));
 }

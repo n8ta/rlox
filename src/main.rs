@@ -3,8 +3,13 @@ use std::process::exit;
 use std::fs::read_to_string;
 use std::io::{BufReader, BufRead};
 
+#[macro_use(lazy_static)]
+extern crate lazy_static;
+
+
 mod scanner;
 use scanner::scanner;
+use crate::scanner::Token;
 
 struct Lox {
     had_error: bool,
@@ -47,7 +52,13 @@ impl Lox {
     }
 
     fn run(&mut self, src: String) {
-        let tokens = scanner(src);
+        let tokens = match scanner(src) {
+            Ok(t) => t,
+            Err(( message, line)) => {
+                self.error(line, message);
+                return;
+            }
+        };
         for token in tokens {
             println!("Token: {:?}", token)
         }
