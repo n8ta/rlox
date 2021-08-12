@@ -157,10 +157,17 @@ impl Scanner {
         self.add_token(TokenType::NUMBER(float));
         Ok(())
     }
-    fn identifier(&mut self) {
+    fn identifier(&mut self) -> Result<(), String> {
         while self.peek().is_alphanumeric() { self.advance(); }
         let ident = self.src.chars().skip(self.start).take(self.current - self.start).collect::<String>();
-        self.add_token(KEYWORDS.get(&ident).unwrap().clone());
+        let keyword = match KEYWORDS.get(&ident) {
+            None => {
+                return Err(format!("Expected a reserved word, found: {}", ident));
+            }
+            Some(k) => k,
+        };
+        self.add_token(keyword.clone());
+        Ok(())
     }
     fn peek(&mut self) -> char {
         match self.src.chars().nth(self.current) {
@@ -233,7 +240,7 @@ impl Scanner {
                 if c.is_digit(10) {
                     self.number()?;
                 } else if c.is_alphabetic() {
-                    self.identifier()
+                    self.identifier()?;
                 } else {
                     return Err(format!("Unexpected token `{}`", c));
                 }
@@ -260,7 +267,7 @@ impl Scanner {
     }
 }
 
-// Unwraps for easy tests
+// Unwraps scanner result for easy tests
 fn test_scanner(src: String) -> Vec<Token> {
     let mut scanner = Scanner::new(src);
     scanner.scan_tokens().unwrap()
@@ -296,4 +303,11 @@ fn test_numbers() {
     assert_eq!(vec![TT::NUMBER(123.34)], test_scanner(String::from("123.34")));
     assert_eq!(vec![TT::MINUS, TT::NUMBER(123.0)], test_scanner(String::from("-123.0")));
     assert_eq!(vec![TT::NUMBER(0.0)], test_scanner(String::from("0.0")));
+}
+
+#[test]
+fn test_identifiers() {
+    type TT = TokenType;
+    assert_eq!(vec![TT::AND, TT::OR, TT::TRUE, TT::FALSE], test_scanner(String::from("and or true\n false")));
+    assert_eq!(vec![TT::NIL, TT::PRINT, TT::RETURN, TT::WHILE], test_scanner(String::from("nil print return while")));
 }
