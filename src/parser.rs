@@ -16,7 +16,6 @@ struct Parser {
     current: usize,
 }
 
-
 pub type ExprTy = Box<Expr>;
 
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
@@ -144,23 +143,16 @@ impl Parser {
         if self.matches(vec![LITERAL(Literal::FALSE)]) { return Box::new(Expr::Literal(Literal::TRUE)); }
         if self.matches(vec![LITERAL(Literal::NIL)]) { return Box::new(Expr::Literal(Literal::NIL)); }
         if self.matches(vec![LITERAL(Literal::NUMBER(1.0))]) {
+            // These ifs should always be true (based on the match above). This is an awkward intersection of javas
+            // (language used in the book) Object base class and rust's type system.
+            // I couldn't find a good way to write a generic match that return a specific variant
+            // of the Token enum to avoid the second type check.
             if let Token::LITERAL(lit) = self.previous().unwrap().token {
                 if let Literal::NUMBER(num) = lit {
                     return Box::new(Expr::Literal(Literal::NUMBER(num)));
                 }
             }
         }
-
-        // if self.matches(vec![LITERAL(Literal::NUMBER(1.0)), LITERAL(Literal::STRING(String::from("str")))]) {
-        // let prev = self.previous();
-        // if let Token::LITERAL(lit) = prev.token.clone() {
-        //     if let Literal::NUMBER(num) = lit {
-        //         return Box::new(Expr::Literal(Literal::NUMBER(num)));
-        //     }
-        // }
-        // eprintln!("Failed. Expected a number literal but found {:?}", prev);
-        // exit(-1);
-        // }
         if self.matches(vec![LPAREN]) {
             let expr = self.expression();
             self.consume(RPAREN, String::from("Expected ')' after expression."));
@@ -179,11 +171,42 @@ fn help(str: &str) -> ExprTy {
 }
 
 #[test]
-fn test_ast() {
+fn test_unary() {
     assert_eq!(help("1"), Box::new(Expr::Literal(Literal::NUMBER(1.0))));
     assert_eq!(Box::new(
         Expr::Unary(
             TokenInContext::simple(Token::MINUS),
             Box::new(Expr::Literal(Literal::NUMBER(1.0))))
     ), help("-1"));
+    assert_eq!(Box::new(
+        Expr::Unary(
+            TokenInContext::simple(Token::MINUS),
+            Box::new(Expr::Unary(
+                TokenInContext::simple(Token::MINUS),
+                Box::new(Expr::Literal(Literal::NUMBER(1.0)))))),
+    ), help("--1"));
+    assert_eq!(Box::new(
+        Expr::Unary(
+            TokenInContext::simple(Token::MINUS),
+            Box::new(Expr::Unary(
+                TokenInContext::simple(Token::MINUS),
+                Box::new(Expr::Unary(
+                    TokenInContext::simple(Token::MINUS),
+                    Box::new(Expr::Literal(Literal::NUMBER(1.0)))))))),
+    ), help("---1"));
+    assert_ne!(Box::new(
+        Expr::Unary(
+            TokenInContext::simple(Token::MINUS),
+            Box::new(Expr::Unary(
+                TokenInContext::simple(Token::MINUS),
+                Box::new(Expr::Unary(
+                    TokenInContext::simple(Token::MINUS),
+                    Box::new(Expr::Literal(Literal::NUMBER(1.0)))))))),
+    ), help("----1")); // wrong # of minuses
+}
+
+#[test]
+fn test_precedence() {
+    // primary -> unary -> factor -> term -
+    // let input = ""g
 }
