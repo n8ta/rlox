@@ -3,6 +3,7 @@ use crate::scanner::Token;
 use crate::scanner;
 use crate::scanner::Token::{GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, MINUS, PLUS, SLASH, MULT, LITERAL, LPAREN, RPAREN, BANG, BANG_EQUAL, EQUAL_EQUAL};
 use std::process::exit;
+use crate::scanner::Literal::STRING;
 
 type Tokens = Vec<TokenInContext>;
 
@@ -45,8 +46,7 @@ impl Parser {
 
     fn consume(&mut self, typ: Token, message: String) -> TokenInContext {
         if self.check(typ) { return self.advance(); }
-        eprintln!("Consume failed!\n{}", message);
-        exit(-1);
+        panic!("Consume failed!\n{}", message);
     }
 
     fn matches(&mut self, tokens: Vec<Token>) -> bool {
@@ -55,7 +55,7 @@ impl Parser {
             Some(t) => &t.token,
         };
         for expected in tokens.iter() {
-            if expected == tkn {
+            if expected.type_equal(tkn) {
                 self.advance();
                 return true;
             }
@@ -94,7 +94,7 @@ impl Parser {
         while self.matches(vec![BANG_EQUAL, EQUAL_EQUAL]) {
             let operator = self.previous().unwrap();
             let right = self.comparison();
-            expr = Box::new(Expr::Binary(expr, operator, right));
+            expr = ExprTy::new(Expr::Binary(expr, operator, right));
         }
         expr
     }
@@ -104,7 +104,7 @@ impl Parser {
         while self.matches(vec![GREATER, GREATER_EQUAL, LESS, LESS_EQUAL]) {
             let operator = self.previous().unwrap();
             let right = self.term();
-            expr = Box::new(Expr::Binary(expr, operator, right))
+            expr = ExprTy::new(Expr::Binary(expr, operator, right))
         }
         expr
     }
@@ -114,7 +114,7 @@ impl Parser {
         while self.matches(vec![MINUS, PLUS]) {
             let operator = self.previous().unwrap();
             let right = self.factor();
-            expr = Box::new(Expr::Binary(expr, operator, right))
+            expr = ExprTy::new(Expr::Binary(expr, operator, right))
         }
         expr
     }
@@ -124,7 +124,7 @@ impl Parser {
         while self.matches(vec![SLASH, MULT]) {
             let operator = self.previous().unwrap();
             let right = self.unary();
-            expr = Box::new(Expr::Unary(operator, right));
+            expr = ExprTy::new(Expr::Binary(expr, operator, right));
         }
         expr
     }
@@ -133,15 +133,15 @@ impl Parser {
         if self.matches(vec![BANG, MINUS]) {
             let operator = self.previous().unwrap();
             let right = self.unary();
-            return Box::new(Expr::Unary(operator, right));
+            return ExprTy::new(Expr::Unary(operator, right));
         }
         return self.primary();
     }
 
     fn primary(&mut self) -> ExprTy {
-        if self.matches(vec![LITERAL(Literal::FALSE)]) { return Box::new(Expr::Literal(Literal::FALSE)); }
-        if self.matches(vec![LITERAL(Literal::FALSE)]) { return Box::new(Expr::Literal(Literal::TRUE)); }
-        if self.matches(vec![LITERAL(Literal::NIL)]) { return Box::new(Expr::Literal(Literal::NIL)); }
+        if self.matches(vec![LITERAL(Literal::FALSE)]) { return ExprTy::new(Expr::Literal(Literal::FALSE)); }
+        if self.matches(vec![LITERAL(Literal::TRUE)]) { return ExprTy::new(Expr::Literal(Literal::TRUE)); }
+        if self.matches(vec![LITERAL(Literal::NIL)]) { return ExprTy::new(Expr::Literal(Literal::NIL)); }
         if self.matches(vec![LITERAL(Literal::NUMBER(1.0))]) {
             // These ifs should always be true (based on the match above). This is an awkward intersection of javas
             // (language used in the book) Object base class and rust's type system.
@@ -149,17 +149,26 @@ impl Parser {
             // of the Token enum to avoid the second type check.
             if let Token::LITERAL(lit) = self.previous().unwrap().token {
                 if let Literal::NUMBER(num) = lit {
-                    return Box::new(Expr::Literal(Literal::NUMBER(num)));
+                    return ExprTy::new(Expr::Literal(Literal::NUMBER(num)));
                 }
             }
+            panic!("This path shouldn't happen!");
         }
         if self.matches(vec![LPAREN]) {
             let expr = self.expression();
             self.consume(RPAREN, String::from("Expected ')' after expression."));
-            return Box::new(Expr::Grouping(expr));
+            return ExprTy::new(Expr::Grouping(expr));
         }
-        eprintln!("Failed to match anything!");
-        exit(-1);
+        if self.matches(vec![LITERAL(Literal::STRING("test".to_string()))]) {
+            let str = self.previous().expect("Expected there to be a previous token b/c match passed");
+            if let Token::LITERAL(lit) = str.token {
+                if let Literal::STRING(str) = lit {
+                    return ExprTy::new(Expr::Literal(Literal::STRING(str)));
+                }
+            }
+            panic!("Also shouldn't happen. something wrong with matches function");
+        }
+        panic!("Failed to match anything for {:?}", self.tokens[self.current]);
     }
 }
 
@@ -172,41 +181,105 @@ fn help(str: &str) -> ExprTy {
 
 #[test]
 fn test_unary() {
-    assert_eq!(help("1"), Box::new(Expr::Literal(Literal::NUMBER(1.0))));
-    assert_eq!(Box::new(
+    assert_eq!(help("1"), ExprTy::new(Expr::Literal(Literal::NUMBER(1.0))));
+    assert_eq!(ExprTy::new(
         Expr::Unary(
             TokenInContext::simple(Token::MINUS),
-            Box::new(Expr::Literal(Literal::NUMBER(1.0))))
+            ExprTy::new(Expr::Literal(Literal::NUMBER(1.0))))
     ), help("-1"));
-    assert_eq!(Box::new(
+    assert_eq!(ExprTy::new(
         Expr::Unary(
             TokenInContext::simple(Token::MINUS),
-            Box::new(Expr::Unary(
+            ExprTy::new(Expr::Unary(
                 TokenInContext::simple(Token::MINUS),
-                Box::new(Expr::Literal(Literal::NUMBER(1.0)))))),
+                ExprTy::new(Expr::Literal(Literal::NUMBER(1.0)))))),
     ), help("--1"));
-    assert_eq!(Box::new(
+    assert_eq!(ExprTy::new(
         Expr::Unary(
             TokenInContext::simple(Token::MINUS),
-            Box::new(Expr::Unary(
+            ExprTy::new(Expr::Unary(
                 TokenInContext::simple(Token::MINUS),
-                Box::new(Expr::Unary(
+                ExprTy::new(Expr::Unary(
                     TokenInContext::simple(Token::MINUS),
-                    Box::new(Expr::Literal(Literal::NUMBER(1.0)))))))),
+                    ExprTy::new(Expr::Literal(Literal::NUMBER(1.0)))))))),
     ), help("---1"));
-    assert_ne!(Box::new(
+    assert_ne!(ExprTy::new(
         Expr::Unary(
             TokenInContext::simple(Token::MINUS),
-            Box::new(Expr::Unary(
+            ExprTy::new(Expr::Unary(
                 TokenInContext::simple(Token::MINUS),
-                Box::new(Expr::Unary(
+                ExprTy::new(Expr::Unary(
                     TokenInContext::simple(Token::MINUS),
-                    Box::new(Expr::Literal(Literal::NUMBER(1.0)))))))),
+                    ExprTy::new(Expr::Literal(Literal::NUMBER(1.0)))))))),
     ), help("----1")); // wrong # of minuses
+}
+
+fn num(fl: f64) -> ExprTy {
+    ExprTy::new(Expr::Literal(Literal::NUMBER(fl)))
 }
 
 #[test]
 fn test_precedence() {
-    // primary -> unary -> factor -> term -
-    // let input = ""g
+    let mult = ExprTy::new(Expr::Binary(
+        num(2.0),
+        TokenInContext::simple(Token::MULT),
+        num(8.0),
+    ));
+    let add = ExprTy::new(Expr::Binary(
+        num(1.0),
+        TokenInContext::simple(Token::PLUS),
+        mult.clone(),
+    ));
+    assert_eq!(mult, help("2 * 8"));
+    assert_eq!(add, help("1 + 2 * 8"));
+    let lt = ExprTy::new(Expr::Binary(
+        add.clone(),
+        TokenInContext::simple(Token::LESS),
+        num(13.3)));
+    assert_eq!(lt.clone(), help("1 + 2 * 8 < 13.3"));
+    let eqeq = ExprTy::new(
+        Expr::Binary(
+            num(29.0),
+            TokenInContext::simple(Token::EQUAL_EQUAL),
+            lt));
+    assert_eq!(eqeq, help("29 == 1 + 2 * 8 < 13.3"));
+    let not_five = ExprTy::new(
+        Expr::Unary(
+            TokenInContext::simple(Token::BANG),
+            num(5.0)));
+    assert_eq!(not_five.clone(), help("!5.0"));
+    let add_not_five = ExprTy::new(
+        Expr::Binary(
+            not_five.clone(),
+            TokenInContext::simple(Token::PLUS),
+            num(4.0)));
+    assert_eq!(add_not_five.clone(), help("!5.0 + 4"));
+    let group = ExprTy::new(Expr::Grouping(mult.clone()));
+    assert_eq!(
+        group,
+        help("(2 * 8)"));
+    let group_group = ExprTy::new(Expr::Grouping(group.clone()));
+    assert_eq!(group_group.clone(), help("((2*8))"));
 }
+
+#[test]
+fn test_primaries() {
+    let one = num(1.0);
+    let hello = ExprTy::new(Expr::Literal(Literal::STRING("hello".into())));
+    let fls = ExprTy::new(Expr::Literal(Literal::FALSE));
+    let tru = ExprTy::new(Expr::Literal(Literal::TRUE));
+    let nil = ExprTy::new(Expr::Literal(Literal::NIL));
+
+    assert_eq!(one.clone(), help("1"));
+    assert_eq!(hello.clone(), help("\"hello\""));
+    assert_eq!(fls.clone(), help("false"));
+    assert_eq!(tru.clone(), help("true"));
+    assert_eq!(nil.clone(), help("nil"));
+}
+
+// == !=
+// > >= < <=
+// - +
+// * /
+// ! -
+// 1.0 "hello" true false nil    "(" expr ")"
