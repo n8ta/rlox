@@ -1,33 +1,67 @@
 use std::collections::HashMap;
-use std::num::ParseFloatError;
 
 lazy_static! {
-    static ref KEYWORDS: HashMap<String, TokenType> = {
-        let mut map: HashMap<String, TokenType> = HashMap::default();
-        map.insert(String::from("and"), TokenType::AND);
-        map.insert(String::from("else"), TokenType::ELSE);
-        map.insert(String::from("false"), TokenType::FALSE);
-        map.insert(String::from("for"), TokenType::FOR);
-        map.insert(String::from("fun"), TokenType::FUN);
-        map.insert(String::from("if"), TokenType::IF);
-        map.insert(String::from("nil"), TokenType::NIL);
-        map.insert(String::from("or"), TokenType::OR);
-        map.insert(String::from("print"), TokenType::PRINT);
-        map.insert(String::from("return"), TokenType::RETURN);
-        map.insert(String::from("super"), TokenType::SUPER);
-        map.insert(String::from("this"), TokenType::THIS);
-        map.insert(String::from("true"), TokenType::TRUE);
-        map.insert(String::from("var"), TokenType::VAR);
-        map.insert(String::from("while"), TokenType::WHILE);
+    static ref KEYWORDS: HashMap<String, Token> = {
+        let mut map: HashMap<String, Token> = HashMap::default();
+        map.insert(String::from("and"), Token::AND);
+        map.insert(String::from("else"), Token::ELSE);
+        map.insert(String::from("false"), Token::LITERAL(Literal::FALSE));
+        map.insert(String::from("for"), Token::FOR);
+        map.insert(String::from("fun"), Token::FUN);
+        map.insert(String::from("if"), Token::IF);
+        map.insert(String::from("nil"), Token::LITERAL(Literal::NIL));
+        map.insert(String::from("or"), Token::OR);
+        map.insert(String::from("print"), Token::PRINT);
+        map.insert(String::from("return"), Token::RETURN);
+        map.insert(String::from("super"), Token::SUPER);
+        map.insert(String::from("this"), Token::THIS);
+        map.insert(String::from("true"), Token::LITERAL(Literal::TRUE));
+        map.insert(String::from("var"), Token::VAR);
+        map.insert(String::from("while"), Token::WHILE);
         map
     };
 }
 
-#[allow(dead_code)]
-#[allow(unused_variables)]
+#[derive(Clone, PartialOrd, PartialEq, Debug)]
+pub enum Literal {
+    STRING(String),
+    NUMBER(f64),
+    TRUE,
+    FALSE,
+    NIL,
+}
+
+/// Equality is type equality not value equality
+impl Literal {
+    fn type_equal(&self, other: &Self) -> bool {
+        match self {
+            Literal::STRING(x) => match other {
+                Literal::STRING(_) => true,
+                _ => false,
+            }
+            Literal::NUMBER(x) => match other {
+                Literal::NUMBER(_) => true,
+                _ => false,
+            }
+            Literal::TRUE => match other {
+                Literal::TRUE => true,
+                _ => false,
+            },
+            Literal::FALSE => match other {
+                Literal::FALSE => true,
+                _ => false,
+            },
+            Literal::NIL => match other {
+                Literal::NIL => true,
+                _ => false,
+            },
+        }
+    }
+}
+
 #[allow(non_camel_case_types)]
 #[derive(PartialEq, PartialOrd, Clone, Debug)]
-pub enum TokenType {
+pub enum Token {
     PLUS,
     MINUS,
     MULT,
@@ -39,8 +73,7 @@ pub enum TokenType {
     EQUAL_EQUAL,
     BANG_EQUAL,
     BANG,
-    STRING(String),
-    NUMBER(f64),
+    LITERAL(Literal),
     IDENTIFIER,
     SEMICOLON,
     COMMA,
@@ -52,44 +85,59 @@ pub enum TokenType {
     LESS_EQUAL,
     AND,
     ELSE,
-    FALSE,
     FOR,
     FUN,
     IF,
-    NIL,
     OR,
     PRINT,
     RETURN,
     SUPER,
     THIS,
-    TRUE,
     VAR,
     WHILE,
+    EOF,
 }
 
-#[derive(Debug, Clone)]
-pub struct Token {
-    token: TokenType,
-    lexeme: String,
-    line: usize,
+#[derive(Debug, Clone, PartialOrd)]
+pub struct TokenInContext {
+    pub token: Token,
+    pub lexeme: String,
+    pub line: usize,
 }
 
-type ScannerResult = Result<Vec<Token>, (String, usize)>;
-
-impl Token {
-    fn new(token: TokenType, lexeme: String, line: usize) -> Token {
-        Token { token, lexeme, line }
+impl TokenInContext {
+    pub fn simple(token: Token) -> TokenInContext {
+        TokenInContext { token, lexeme: String::from(""), line: 0 }
+    }
+    pub fn new(token: Token, lexeme: String, line: usize) -> TokenInContext {
+        TokenInContext { token, lexeme, line }
     }
 }
 
-impl PartialEq<Token> for TokenType {
-    fn eq(&self, other: &Token) -> bool {
+type ScannerResult = Result<Vec<TokenInContext>, (String, usize)>;
+
+
+impl Token {
+    /// Compare two tokens by type only
+    pub(crate) fn type_equal(&self, other: &Token) -> bool {
+        match self {
+            Token::LITERAL(lit1) => match other {
+                Token::LITERAL(lit2) => lit1.type_equal(lit2),
+                _ => false,
+            }
+            _ => *self == *other,
+        }
+    }
+}
+
+impl PartialEq<TokenInContext> for Token {
+    fn eq(&self, other: &TokenInContext) -> bool {
         other.token == *self
     }
 }
 
-impl PartialEq for Token {
-    fn eq(self: &Token, b: &Token) -> bool {
+impl PartialEq for TokenInContext {
+    fn eq(self: &TokenInContext, b: &TokenInContext) -> bool {
         return self.token == b.token;
     }
 }
@@ -104,7 +152,7 @@ struct Scanner {
     start: usize,
     current: usize,
     line: usize,
-    tokens: Vec<Token>,
+    tokens: Vec<TokenInContext>,
 }
 
 impl Scanner {
@@ -117,9 +165,9 @@ impl Scanner {
         self.current += 1;
         x
     }
-    fn add_token(&mut self, tt: TokenType) {
+    fn add_token(&mut self, tt: Token) {
         self.tokens.push(
-            Token::new(
+            TokenInContext::new(
                 tt,
                 self.src.chars().skip(self.start).take(self.current - self.start).collect::<String>(),
                 self.line)
@@ -131,13 +179,14 @@ impl Scanner {
             self.advance();
         }
         if self.is_at_end() {
-            let partial_str = self.src.chars().skip(self.start).take(self.src.len()-self.start).collect::<String>();
+            let partial_str = self.src.chars().skip(self.start).take(self.src.len() - self.start).collect::<String>();
             return Err(format!("Unterminated String: {}", partial_str));
         }
         self.advance();
         self.add_token(
-            TokenType::STRING(
-                self.src.chars().skip(self.start + 1).take(self.current - self.start - 2).collect::<String>()));
+            Token::LITERAL(
+                Literal::STRING(
+                    self.src.chars().skip(self.start + 1).take(self.current - self.start - 2).collect::<String>())));
         return Ok(());
     }
     fn number(&mut self) -> Result<(), String> {
@@ -154,7 +203,7 @@ impl Scanner {
                 return Err(String::from("Unable to parse f64 {}"));
             }
         };
-        self.add_token(TokenType::NUMBER(float));
+        self.add_token(Token::LITERAL(Literal::NUMBER(float)));
         Ok(())
     }
     fn identifier(&mut self) -> Result<(), String> {
@@ -184,41 +233,41 @@ impl Scanner {
     fn scan_token(&mut self) -> Result<(), String> {
         let c = self.advance();
         match c {
-            '(' => self.add_token(TokenType::LPAREN),
-            ')' => self.add_token(TokenType::RPAREN),
-            '{' => self.add_token(TokenType::LBRACE),
-            '}' => self.add_token(TokenType::RBRACE),
-            ',' => self.add_token(TokenType::COMMA),
-            '.' => self.add_token(TokenType::DOT),
-            '-' => self.add_token(TokenType::MINUS),
-            '+' => self.add_token(TokenType::PLUS),
-            ';' => self.add_token(TokenType::SEMICOLON),
-            '*' => self.add_token(TokenType::MULT),
+            '(' => self.add_token(Token::LPAREN),
+            ')' => self.add_token(Token::RPAREN),
+            '{' => self.add_token(Token::LBRACE),
+            '}' => self.add_token(Token::RBRACE),
+            ',' => self.add_token(Token::COMMA),
+            '.' => self.add_token(Token::DOT),
+            '-' => self.add_token(Token::MINUS),
+            '+' => self.add_token(Token::PLUS),
+            ';' => self.add_token(Token::SEMICOLON),
+            '*' => self.add_token(Token::MULT),
             '!' => {
                 let tt = match self.matches('=') {
-                    true => TokenType::BANG_EQUAL,
-                    false => TokenType::BANG,
+                    true => Token::BANG_EQUAL,
+                    false => Token::BANG,
                 };
                 self.add_token(tt);
             }
             '=' => {
                 let tt = match self.matches('=') {
-                    true => TokenType::EQUAL_EQUAL,
-                    false => TokenType::EQUAL
+                    true => Token::EQUAL_EQUAL,
+                    false => Token::EQUAL
                 };
                 self.add_token(tt)
             }
             '<' => {
                 let tt = match self.matches('=') {
-                    true => TokenType::LESS_EQUAL,
-                    false => TokenType::LESS
+                    true => Token::LESS_EQUAL,
+                    false => Token::LESS
                 };
                 self.add_token(tt)
             }
             '>' => {
                 let tt = match self.matches('=') {
-                    true => TokenType::GREATER_EQUAL,
-                    false => TokenType::GREATER
+                    true => Token::GREATER_EQUAL,
+                    false => Token::GREATER
                 };
                 self.add_token(tt)
             }
@@ -228,7 +277,7 @@ impl Scanner {
                         self.advance();
                     }
                 } else {
-                    self.add_token(TokenType::SLASH);
+                    self.add_token(Token::SLASH);
                 }
             }
             '"' => self.string()?,
@@ -263,20 +312,24 @@ impl Scanner {
             }
             self.start = self.current;
         }
+        self.tokens.push(TokenInContext::new(Token::EOF, "EOF".to_string(), self.line+1));
         Ok(self.tokens.clone())
     }
 }
 
 // Unwraps scanner result for easy tests
-fn test_scanner(src: String) -> Vec<Token> {
+fn test_scanner(src: String) -> Vec<TokenInContext> {
     let mut scanner = Scanner::new(src);
-    scanner.scan_tokens().unwrap()
+    let mut tokens = scanner.scan_tokens().unwrap();
+    tokens.pop(); // remove EOF
+    tokens
+
 }
 
 
 #[test]
 fn test_basic_lexemes() {
-    type TT = TokenType;
+    type TT = Token;
     assert_eq!(vec![TT::EQUAL], test_scanner(String::from("=")));
     assert_eq!(vec![TT::BANG_EQUAL], test_scanner(String::from("!=")));
     assert_eq!(vec![TT::BANG_EQUAL, TT::EQUAL_EQUAL], test_scanner(String::from("!===")));
@@ -289,25 +342,27 @@ fn test_basic_lexemes() {
 
 #[test]
 fn test_strings() {
-    type TT = TokenType;
-    assert_eq!(vec![TT::STRING(String::from("Cat")), TT::STRING(String::from("HAT"))], test_scanner(String::from("\"Cat\" \"HAT\"")));
-    assert_eq!(vec![TT::STRING(String::from("Helloßßßßß"))], test_scanner(String::from("\"Helloßßßßß\"")));
-    assert_eq!(vec![TT::STRING(String::from("Hello")), TT::GREATER], test_scanner(String::from("\"Hello\" >")));
-    assert_eq!(vec![TT::STRING(String::from(""))], test_scanner(String::from("   \t\r\n\"\" ")));
+    type TT = Token;
+    assert_eq!(vec![TT::LITERAL(Literal::STRING(String::from("Cat"))), TT::LITERAL(Literal::STRING(String::from("HAT")))], test_scanner(String::from("\"Cat\" \"HAT\"")));
+    assert_eq!(vec![TT::LITERAL(Literal::STRING(String::from("Helloßßßßß")))], test_scanner(String::from("\"Helloßßßßß\"")));
+    assert_eq!(vec![TT::LITERAL(Literal::STRING(String::from("Hello"))), TT::GREATER], test_scanner(String::from("\"Hello\" >")));
+    assert_eq!(vec![TT::LITERAL(Literal::STRING(String::from("")))], test_scanner(String::from("   \t\r\n\"\" ")));
 }
 
 #[test]
 fn test_numbers() {
-    type TT = TokenType;
-    assert_eq!(vec![TT::NUMBER(123.0)], test_scanner(String::from("123")));
-    assert_eq!(vec![TT::NUMBER(123.34)], test_scanner(String::from("123.34")));
-    assert_eq!(vec![TT::MINUS, TT::NUMBER(123.0)], test_scanner(String::from("-123.0")));
-    assert_eq!(vec![TT::NUMBER(0.0)], test_scanner(String::from("0.0")));
+    type TT = Token;
+    assert_eq!(vec![TT::LITERAL(Literal::NUMBER(123.0))], test_scanner(String::from("123")));
+    assert_eq!(vec![TT::LITERAL(Literal::NUMBER(123.34))], test_scanner(String::from("123.34")));
+    assert_eq!(vec![TT::MINUS,TT::LITERAL(Literal::NUMBER(123.0))], test_scanner(String::from("-123.0")));
+    assert_ne!(vec![TT::MINUS,TT::LITERAL(Literal::NUMBER(124.0))], test_scanner(String::from("-123.0")));
+    assert_ne!(vec![TT::LITERAL(Literal::NUMBER(124.0))], test_scanner(String::from("123.0")));
+    assert_eq!(vec![TT::LITERAL(Literal::NUMBER(0.0))], test_scanner(String::from("0.0")));
 }
 
 #[test]
 fn test_identifiers() {
-    type TT = TokenType;
-    assert_eq!(vec![TT::AND, TT::OR, TT::TRUE, TT::FALSE], test_scanner(String::from("and or true\n false")));
-    assert_eq!(vec![TT::NIL, TT::PRINT, TT::RETURN, TT::WHILE], test_scanner(String::from("nil print return while")));
+    type TT = Token;
+    assert_eq!(vec![TT::AND, TT::OR, TT::LITERAL(Literal::TRUE), TT::LITERAL(Literal::FALSE)], test_scanner(String::from("and or true\n false")));
+    assert_eq!(vec![TT::LITERAL(Literal::NIL), TT::PRINT, TT::RETURN, TT::WHILE], test_scanner(String::from("nil print return while")));
 }

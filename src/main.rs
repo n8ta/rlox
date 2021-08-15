@@ -8,8 +8,9 @@ extern crate lazy_static;
 
 
 mod scanner;
+mod parser;
+
 use scanner::scanner;
-use crate::scanner::Token;
 
 struct Lox {
     had_error: bool,
@@ -79,3 +80,4 @@ fn main() {
     let mut lox = Lox::new();
     lox.main(args);
 }
+
