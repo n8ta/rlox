@@ -1,13 +1,10 @@
-use crate::scanner::{TokenInContext, Literal};
-use crate::scanner::Token;
+use crate::scanner::{Token, TokenInContext, Literal};
 use crate::scanner;
 use crate::scanner::Token::{GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, MINUS, PLUS, SLASH, MULT, LITERAL, LPAREN, RPAREN, BANG, BANG_EQUAL, EQUAL_EQUAL};
-use std::process::exit;
-use crate::scanner::Literal::STRING;
 
 type Tokens = Vec<TokenInContext>;
 
-pub fn parser(tokens: Tokens) -> ExprTy {
+pub fn parse(tokens: Tokens) -> PResult {
     let mut parser = Parser::new(tokens);
     parser.parse()
 }
@@ -27,13 +24,20 @@ pub enum Expr {
     Unary(TokenInContext, ExprTy),
 }
 
+type PResult = Result<ExprTy, String>;
+
 impl Parser {
     fn new(tokens: Tokens) -> Parser {
         Parser { tokens, current: 0 }
     }
 
-    fn parse(&mut self) -> ExprTy {
-        self.expression()
+    fn parse(&mut self) -> Result<ExprTy, String> {
+        match self.expression() {
+            Ok(prog) => Ok(prog),
+            Err(err) => {
+                Err(format!("[line {}] `{}` -- Error: {}", self.tokens[self.current].line, self.tokens[self.current].lexeme, err))
+            }
+        }
     }
 
     fn check(&mut self, typ: Token) -> bool {
@@ -44,9 +48,25 @@ impl Parser {
         }
     }
 
-    fn consume(&mut self, typ: Token, message: String) -> TokenInContext {
-        if self.check(typ) { return self.advance(); }
-        panic!("Consume failed!\n{}", message);
+    fn consume(&mut self, typ: Token, message: String) -> Result<TokenInContext, String> {
+        if self.check(typ.clone()) { return Ok(self.advance()); }
+        Err(format!("Consume failed, didn't find a {:?} as expected.", typ))
+    }
+
+    fn synchronize(&mut self) {
+        self.advance();
+        while !self.is_at_end() {
+            if self.previous().is_some() && self.previous().unwrap().token.type_equal(&Token::SEMICOLON) {
+                return;
+            }
+            match self.peek().token {
+                Token::CLASS | Token::FUN | Token::VAR | Token::FOR | Token::IF | Token::WHILE | Token::PRINT | Token::RETURN => {
+                    return
+                }
+                _ => {}
+            }
+            self.advance();
+        }
     }
 
     fn matches(&mut self, tokens: Vec<Token>) -> bool {
@@ -85,63 +105,63 @@ impl Parser {
         self.previous().unwrap()
     }
 
-    fn expression(&mut self) -> ExprTy {
+    fn expression(&mut self) -> PResult {
         self.equality()
     }
 
-    fn equality(&mut self) -> ExprTy {
-        let mut expr = self.comparison();
+    fn equality(&mut self) -> PResult {
+        let mut expr = self.comparison()?;
         while self.matches(vec![BANG_EQUAL, EQUAL_EQUAL]) {
             let operator = self.previous().unwrap();
-            let right = self.comparison();
+            let right = self.comparison()?;
             expr = ExprTy::new(Expr::Binary(expr, operator, right));
         }
-        expr
+        Ok(expr)
     }
 
-    fn comparison(&mut self) -> ExprTy {
-        let mut expr = self.term();
+    fn comparison(&mut self) -> PResult {
+        let mut expr = self.term()?;
         while self.matches(vec![GREATER, GREATER_EQUAL, LESS, LESS_EQUAL]) {
             let operator = self.previous().unwrap();
-            let right = self.term();
+            let right = self.term()?;
             expr = ExprTy::new(Expr::Binary(expr, operator, right))
         }
-        expr
+        Ok(expr)
     }
 
-    fn term(&mut self) -> ExprTy {
-        let mut expr: ExprTy = self.factor();
+    fn term(&mut self) -> PResult {
+        let mut expr: ExprTy = self.factor()?;
         while self.matches(vec![MINUS, PLUS]) {
             let operator = self.previous().unwrap();
-            let right = self.factor();
+            let right = self.factor()?;
             expr = ExprTy::new(Expr::Binary(expr, operator, right))
         }
-        expr
+        Ok(expr)
     }
 
-    fn factor(&mut self) -> ExprTy {
-        let mut expr = self.unary();
+    fn factor(&mut self) -> PResult {
+        let mut expr = self.unary()?;
         while self.matches(vec![SLASH, MULT]) {
             let operator = self.previous().unwrap();
-            let right = self.unary();
+            let right = self.unary()?;
             expr = ExprTy::new(Expr::Binary(expr, operator, right));
         }
-        expr
+        Ok(expr)
     }
 
-    fn unary(&mut self) -> ExprTy {
+    fn unary(&mut self) -> PResult {
         if self.matches(vec![BANG, MINUS]) {
             let operator = self.previous().unwrap();
-            let right = self.unary();
-            return ExprTy::new(Expr::Unary(operator, right));
+            let right = self.unary()?;
+            return Ok(ExprTy::new(Expr::Unary(operator, right)));
         }
-        return self.primary();
+        Ok(self.primary()?)
     }
 
-    fn primary(&mut self) -> ExprTy {
-        if self.matches(vec![LITERAL(Literal::FALSE)]) { return ExprTy::new(Expr::Literal(Literal::FALSE)); }
-        if self.matches(vec![LITERAL(Literal::TRUE)]) { return ExprTy::new(Expr::Literal(Literal::TRUE)); }
-        if self.matches(vec![LITERAL(Literal::NIL)]) { return ExprTy::new(Expr::Literal(Literal::NIL)); }
+    fn primary(&mut self) -> PResult {
+        if self.matches(vec![LITERAL(Literal::FALSE)]) { return Ok(ExprTy::new(Expr::Literal(Literal::FALSE))); }
+        if self.matches(vec![LITERAL(Literal::TRUE)]) { return Ok(ExprTy::new(Expr::Literal(Literal::TRUE))); }
+        if self.matches(vec![LITERAL(Literal::NIL)]) { return Ok(ExprTy::new(Expr::Literal(Literal::NIL))); }
         if self.matches(vec![LITERAL(Literal::NUMBER(1.0))]) {
             // These ifs should always be true (based on the match above). This is an awkward intersection of javas
             // (language used in the book) Object base class and rust's type system.
@@ -149,26 +169,26 @@ impl Parser {
             // of the Token enum to avoid the second type check.
             if let Token::LITERAL(lit) = self.previous().unwrap().token {
                 if let Literal::NUMBER(num) = lit {
-                    return ExprTy::new(Expr::Literal(Literal::NUMBER(num)));
+                    return Ok(ExprTy::new(Expr::Literal(Literal::NUMBER(num))));
                 }
             }
             panic!("This path shouldn't happen!");
         }
         if self.matches(vec![LPAREN]) {
-            let expr = self.expression();
-            self.consume(RPAREN, String::from("Expected ')' after expression."));
-            return ExprTy::new(Expr::Grouping(expr));
+            let expr = self.expression()?;
+            self.consume(RPAREN, String::from("Expected ')' after expression."))?;
+            return Ok(ExprTy::new(Expr::Grouping(expr)));
         }
         if self.matches(vec![LITERAL(Literal::STRING("test".to_string()))]) {
             let str = self.previous().expect("Expected there to be a previous token b/c match passed");
             if let Token::LITERAL(lit) = str.token {
                 if let Literal::STRING(str) = lit {
-                    return ExprTy::new(Expr::Literal(Literal::STRING(str)));
+                    return Ok(ExprTy::new(Expr::Literal(Literal::STRING(str))));
                 }
             }
             panic!("Also shouldn't happen. something wrong with matches function");
         }
-        panic!("Failed to match anything for {:?}", self.tokens[self.current]);
+        Err(format!("Failed to match any expression for {:?}", self.tokens[self.current]))
     }
 }
 
@@ -176,7 +196,7 @@ impl Parser {
 fn help(str: &str) -> ExprTy {
     let mut tokens = scanner(str.to_string()).unwrap();
     tokens.pop();
-    parser(tokens)
+    parse(tokens).unwrap()
 }
 
 #[test]
@@ -269,17 +289,9 @@ fn test_primaries() {
     let fls = ExprTy::new(Expr::Literal(Literal::FALSE));
     let tru = ExprTy::new(Expr::Literal(Literal::TRUE));
     let nil = ExprTy::new(Expr::Literal(Literal::NIL));
-
     assert_eq!(one.clone(), help("1"));
-    assert_eq!(hello.clone(), help("\"hello\""));
+    assert_eq!(hello.clone(), help("   \"hello\""));
     assert_eq!(fls.clone(), help("false"));
     assert_eq!(tru.clone(), help("true"));
     assert_eq!(nil.clone(), help("nil"));
 }
-
-// == !=
-// > >= < <=
-// - +
-// * /
-// ! -
-// 1.0 "hello" true false nil    "(" expr ")"

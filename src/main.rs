@@ -9,8 +9,10 @@ extern crate lazy_static;
 
 mod scanner;
 mod parser;
+mod interpreter;
 
 use scanner::scanner;
+use parser::parse;
 
 struct Lox {
     had_error: bool,
@@ -60,8 +62,9 @@ impl Lox {
                 return;
             }
         };
-        for token in tokens {
-            println!("Token: {:?}", token)
+        match parse(tokens) {
+            Ok(ast) => println!("AST: {:?}", ast),
+            Err(err) => eprintln!("{}", err),
         }
     }
 

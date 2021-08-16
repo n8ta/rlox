@@ -87,6 +87,7 @@ pub enum Token {
     ELSE,
     FOR,
     FUN,
+    CLASS,
     IF,
     OR,
     PRINT,
@@ -115,7 +116,6 @@ impl TokenInContext {
 }
 
 type ScannerResult = Result<Vec<TokenInContext>, (String, usize)>;
-
 
 impl Token {
     /// Compare two tokens by type only
