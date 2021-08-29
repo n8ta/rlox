@@ -13,6 +13,7 @@ mod interpreter;
 
 use scanner::scanner;
 use parser::parse;
+use crate::interpreter::interpret;
 
 struct Lox {
     had_error: bool,
@@ -63,7 +64,10 @@ impl Lox {
             }
         };
         match parse(tokens) {
-            Ok(ast) => println!("AST: {:?}", ast),
+            Ok(ast) =>  {
+                println!("AST: {:?}", ast);
+                println!("=> {:?}", interpret(ast));
+            },
             Err(err) => eprintln!("{}", err),
         }
     }

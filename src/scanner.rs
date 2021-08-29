@@ -5,7 +5,7 @@ lazy_static! {
         let mut map: HashMap<String, Token> = HashMap::default();
         map.insert(String::from("and"), Token::AND);
         map.insert(String::from("else"), Token::ELSE);
-        map.insert(String::from("false"), Token::LITERAL(Literal::FALSE));
+        map.insert(String::from("false"), Token::LITERAL(Literal::BOOL(false)));
         map.insert(String::from("for"), Token::FOR);
         map.insert(String::from("fun"), Token::FUN);
         map.insert(String::from("if"), Token::IF);
@@ -15,7 +15,7 @@ lazy_static! {
         map.insert(String::from("return"), Token::RETURN);
         map.insert(String::from("super"), Token::SUPER);
         map.insert(String::from("this"), Token::THIS);
-        map.insert(String::from("true"), Token::LITERAL(Literal::TRUE));
+        map.insert(String::from("true"), Token::LITERAL(Literal::BOOL(true)));
         map.insert(String::from("var"), Token::VAR);
         map.insert(String::from("while"), Token::WHILE);
         map
@@ -26,35 +26,37 @@ lazy_static! {
 pub enum Literal {
     STRING(String),
     NUMBER(f64),
-    TRUE,
-    FALSE,
+    BOOL(bool),
     NIL,
 }
 
 /// Equality is type equality not value equality
 impl Literal {
-    fn type_equal(&self, other: &Self) -> bool {
+    pub fn tname(&self) -> String {
+        String::from(
+            match self {
+                Literal::STRING(_) => "STRING",
+                Literal::NUMBER(_) => "NUMBER",
+                Literal::BOOL(_) => "BOOL",
+                Literal::NIL => "NIL",
+            }
+        )
+    }
+    pub fn truthy(&self) -> bool {
         match self {
-            Literal::STRING(x) => match other {
-                Literal::STRING(_) => true,
-                _ => false,
-            }
-            Literal::NUMBER(x) => match other {
-                Literal::NUMBER(_) => true,
-                _ => false,
-            }
-            Literal::TRUE => match other {
-                Literal::TRUE => true,
-                _ => false,
-            },
-            Literal::FALSE => match other {
-                Literal::FALSE => true,
-                _ => false,
-            },
-            Literal::NIL => match other {
-                Literal::NIL => true,
-                _ => false,
-            },
+            Literal::STRING(_) => true,
+            Literal::NUMBER(_) => true,
+            Literal::BOOL(bol) => *bol,
+            Literal::NIL => false,
+        }
+    }
+    pub fn type_equal(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Literal::STRING(_), Literal::STRING(_)) => true,
+            (Literal::NUMBER(_), Literal::NUMBER(_)) => true,
+            (Literal::BOOL(_), Literal::BOOL(_)) => true,
+            (Literal::NIL, Literal::NIL) => true,
+            _ => false,
         }
     }
 }
@@ -63,7 +65,6 @@ impl Literal {
 #[derive(PartialEq, PartialOrd, Clone, Debug)]
 pub enum Token {
     PLUS,
-    MINUS,
     MULT,
     LPAREN,
     RPAREN,
@@ -73,6 +74,7 @@ pub enum Token {
     EQUAL_EQUAL,
     BANG_EQUAL,
     BANG,
+    MINUS,
     LITERAL(Literal),
     IDENTIFIER,
     SEMICOLON,
@@ -312,7 +314,7 @@ impl Scanner {
             }
             self.start = self.current;
         }
-        self.tokens.push(TokenInContext::new(Token::EOF, "EOF".to_string(), self.line+1));
+        self.tokens.push(TokenInContext::new(Token::EOF, "EOF".to_string(), self.line + 1));
         Ok(self.tokens.clone())
     }
 }
@@ -323,7 +325,6 @@ fn test_scanner(src: String) -> Vec<TokenInContext> {
     let mut tokens = scanner.scan_tokens().unwrap();
     tokens.pop(); // remove EOF
     tokens
-
 }
 
 
@@ -354,8 +355,8 @@ fn test_numbers() {
     type TT = Token;
     assert_eq!(vec![TT::LITERAL(Literal::NUMBER(123.0))], test_scanner(String::from("123")));
     assert_eq!(vec![TT::LITERAL(Literal::NUMBER(123.34))], test_scanner(String::from("123.34")));
-    assert_eq!(vec![TT::MINUS,TT::LITERAL(Literal::NUMBER(123.0))], test_scanner(String::from("-123.0")));
-    assert_ne!(vec![TT::MINUS,TT::LITERAL(Literal::NUMBER(124.0))], test_scanner(String::from("-123.0")));
+    assert_eq!(vec![TT::MINUS, TT::LITERAL(Literal::NUMBER(123.0))], test_scanner(String::from("-123.0")));
+    assert_ne!(vec![TT::MINUS, TT::LITERAL(Literal::NUMBER(124.0))], test_scanner(String::from("-123.0")));
     assert_ne!(vec![TT::LITERAL(Literal::NUMBER(124.0))], test_scanner(String::from("123.0")));
     assert_eq!(vec![TT::LITERAL(Literal::NUMBER(0.0))], test_scanner(String::from("0.0")));
 }
@@ -363,6 +364,6 @@ fn test_numbers() {
 #[test]
 fn test_identifiers() {
     type TT = Token;
-    assert_eq!(vec![TT::AND, TT::OR, TT::LITERAL(Literal::TRUE), TT::LITERAL(Literal::FALSE)], test_scanner(String::from("and or true\n false")));
+    assert_eq!(vec![TT::AND, TT::OR, TT::LITERAL(Literal::BOOL(true)), TT::LITERAL(Literal::BOOL(false))], test_scanner(String::from("and or true\n false")));
     assert_eq!(vec![TT::LITERAL(Literal::NIL), TT::PRINT, TT::RETURN, TT::WHILE], test_scanner(String::from("nil print return while")));
 }
