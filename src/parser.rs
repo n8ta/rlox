@@ -1,20 +1,38 @@
 use crate::scanner::{Token, TokenInContext, Literal};
 use crate::scanner;
 use crate::scanner::Token::{MINUS, AND, OR, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, SLASH, MULT, LITERAL, LPAREN, RPAREN, BANG_EQUAL, EQUAL_EQUAL};
+use crate::source_ref::SourceRef;
 
 type Tokens = Vec<TokenInContext>;
 
-pub fn parse(tokens: Tokens) -> PResult {
-    let mut parser = Parser::new(tokens);
+pub fn parse(tokens: Tokens, source: String) -> PResult {
+    let mut parser = Parser::new(tokens, source);
     parser.parse()
 }
 
 struct Parser {
     tokens: Tokens,
     current: usize,
+    source: String,
 }
 
-pub type ExprTy = Box<Expr>;
+pub type ExprTy = Box<ExprInContext>;
+
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
+pub struct ExprInContext {
+    pub context: SourceRef,
+    pub expr: Expr,
+}
+
+fn mk_expr(expr: Expr, context: SourceRef) -> ExprTy {
+    Box::new(ExprInContext::new(expr, context))
+}
+
+impl ExprInContext {
+    fn new(expr: Expr, context: SourceRef) -> ExprInContext {
+        ExprInContext { expr, context }
+    }
+}
 
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
 pub enum Expr {
@@ -82,15 +100,15 @@ impl UnaryOp {
 type PResult = Result<ExprTy, String>;
 
 impl Parser {
-    fn new(tokens: Tokens) -> Parser {
-        Parser { tokens, current: 0 }
+    fn new(tokens: Tokens, source: String) -> Parser {
+        Parser { tokens, current: 0, source }
     }
 
     fn parse(&mut self) -> Result<ExprTy, String> {
         match self.expression() {
             Ok(prog) => Ok(prog),
             Err(err) => {
-                Err(format!("[line {}] `{}` -- Error: {}", self.tokens[self.current].line, self.tokens[self.current].lexeme, err))
+                Err(format!("[line {}] Error: {}", self.tokens[self.current].context.line, err))
             }
         }
     }
@@ -169,7 +187,8 @@ impl Parser {
         while self.matches(vec![BANG_EQUAL, EQUAL_EQUAL]) {
             let operator = BinOp::new(self.previous().unwrap().token);
             let right = self.comparison()?;
-            expr = ExprTy::new(Expr::Binary(expr, operator, right));
+            let context = expr.context.clone().merge(&right.context);
+            expr = mk_expr(Expr::Binary(expr, operator, right), context);
         }
         Ok(expr)
     }
@@ -179,7 +198,9 @@ impl Parser {
         while self.matches(vec![GREATER, GREATER_EQUAL, LESS, LESS_EQUAL]) {
             let operator = BinOp::new(self.previous().unwrap().token);
             let right = self.term()?;
-            expr = ExprTy::new(Expr::Binary(expr, operator, right))
+            let context = expr.context.clone().merge(&right.context);
+            expr = mk_expr(Expr::Binary(expr, operator, right),
+                           context)
         }
         Ok(expr)
     }
@@ -189,7 +210,8 @@ impl Parser {
         while self.matches(vec![Token::MINUS, PLUS]) {
             let operator = BinOp::new(self.previous().unwrap().token);
             let right = self.factor()?;
-            expr = ExprTy::new(Expr::Binary(expr, operator, right))
+            let context = expr.context.clone().merge(&right.context);
+            expr = mk_expr(Expr::Binary(expr, operator, right), context)
         }
         Ok(expr)
     }
@@ -199,7 +221,8 @@ impl Parser {
         while self.matches(vec![SLASH, MULT]) {
             let operator = BinOp::new(self.previous().unwrap().token);
             let right = self.unary()?;
-            expr = ExprTy::new(Expr::Binary(expr, operator, right));
+            let context = expr.context.clone().merge(&right.context);
+            expr = mk_expr(Expr::Binary(expr, operator, right), context);
         }
         Ok(expr)
     }
@@ -208,7 +231,8 @@ impl Parser {
         if self.matches(vec![Token::BANG, Token::MINUS]) {
             let operator = UnaryOp::new(self.previous().unwrap().token);
             let right = self.unary()?;
-            return Ok(ExprTy::new(Expr::Unary(operator, right)));
+            let context = self.previous().unwrap().context.merge(&right.context);
+            return Ok(mk_expr(Expr::Unary(operator, right), context));
         }
         Ok(self.primary()?)
     }
@@ -216,12 +240,12 @@ impl Parser {
     fn primary(&mut self) -> PResult {
         if self.matches(vec![LITERAL(Literal::BOOL(false))]) {
             if let LITERAL(Literal::BOOL(b)) = self.previous().unwrap().token {
-                return Ok(ExprTy::new(Expr::Literal(Literal::BOOL(b))));
+                return Ok(mk_expr(Expr::Literal(Literal::BOOL(b)), self.previous().unwrap().context));
             }
             panic!("This path shouldn't happen. I need a better matches() func");
         }
-        if self.matches(vec![LITERAL(Literal::BOOL(true))]) { return Ok(ExprTy::new(Expr::Literal(Literal::BOOL(true)))); }
-        if self.matches(vec![LITERAL(Literal::NIL)]) { return Ok(ExprTy::new(Expr::Literal(Literal::NIL))); }
+        if self.matches(vec![LITERAL(Literal::BOOL(true))]) { return Ok(mk_expr(Expr::Literal(Literal::BOOL(true)), self.previous().unwrap().context)); }
+        if self.matches(vec![LITERAL(Literal::NIL)]) { return Ok(mk_expr(Expr::Literal(Literal::NIL), self.previous().unwrap().context)); }
         if self.matches(vec![LITERAL(Literal::NUMBER(1.0))]) {
             // These ifs should always be true (based on the match above). This is an awkward intersection of javas
             // (language used in the book) Object base class and rust's type system.
@@ -229,7 +253,7 @@ impl Parser {
             // of the Token enum to avoid the second type check.
             if let Token::LITERAL(lit) = self.previous().unwrap().token {
                 if let Literal::NUMBER(num) = lit {
-                    return Ok(ExprTy::new(Expr::Literal(Literal::NUMBER(num))));
+                    return Ok(mk_expr(Expr::Literal(Literal::NUMBER(num)), self.previous().unwrap().context));
                 }
             }
             panic!("This path shouldn't happen!");
@@ -237,18 +261,18 @@ impl Parser {
         if self.matches(vec![LPAREN]) {
             let expr = self.expression()?;
             self.consume(RPAREN, String::from("Expected ')' after expression."))?;
-            return Ok(ExprTy::new(Expr::Grouping(expr)));
+            return Ok(mk_expr(Expr::Grouping(expr), self.previous().unwrap().context));
         }
         if self.matches(vec![LITERAL(Literal::STRING("test".to_string()))]) {
             let str = self.previous().expect("Expected there to be a previous token b/c match passed");
             if let Token::LITERAL(lit) = str.token {
                 if let Literal::STRING(str) = lit {
-                    return Ok(ExprTy::new(Expr::Literal(Literal::STRING(str))));
+                    return Ok(mk_expr(Expr::Literal(Literal::STRING(str)), self.previous().unwrap().context));
                 }
             }
             panic!("Also shouldn't happen. something wrong with matches function");
         }
-        Err(format!("Failed to match any expression for {:?}", self.tokens[self.current]))
+        Err(format!("Failed to match any expression for {}", self.tokens[self.current].context.source(&self.source)))
     }
 }
 
@@ -256,99 +280,105 @@ impl Parser {
 fn help(str: &str) -> ExprTy {
     let mut tokens = scanner(str.to_string()).unwrap();
     tokens.pop();
-    parse(tokens).unwrap()
+    parse(tokens, "".to_string()).unwrap()
 }
+
+
+fn mk_expr_test(expr: Expr) -> ExprTy {
+    Box::new(ExprInContext::new(expr, SourceRef::new(0, 0, 0)))
+}
+
 
 #[test]
 fn test_unary() {
-    assert_eq!(help("1"), ExprTy::new(Expr::Literal(Literal::NUMBER(1.0))));
-    assert_eq!(ExprTy::new(
+    assert_eq!(help("1"), mk_expr_test(Expr::Literal(Literal::NUMBER(1.0))));
+    assert_eq!(mk_expr_test(
         Expr::Unary(
             UnaryOp::MINUS,
-            ExprTy::new(Expr::Literal(Literal::NUMBER(1.0))))
+            mk_expr_test(Expr::Literal(Literal::NUMBER(1.0))))
     ), help("-1"));
-    assert_eq!(ExprTy::new(
+    assert_eq!(mk_expr_test(
         Expr::Unary(
             UnaryOp::MINUS,
-            ExprTy::new(Expr::Unary(
+            mk_expr_test(Expr::Unary(
                 UnaryOp::MINUS,
-                ExprTy::new(Expr::Literal(Literal::NUMBER(1.0)))))),
+                mk_expr_test(Expr::Literal(Literal::NUMBER(1.0)))))),
     ), help("--1"));
-    assert_eq!(ExprTy::new(
+    assert_eq!(mk_expr_test(
         Expr::Unary(
             UnaryOp::MINUS,
-            ExprTy::new(Expr::Unary(
+            mk_expr_test(Expr::Unary(
                 UnaryOp::MINUS,
-                ExprTy::new(Expr::Unary(
+                mk_expr_test(Expr::Unary(
                     UnaryOp::MINUS,
-                    ExprTy::new(Expr::Literal(Literal::NUMBER(1.0)))))))),
+                    mk_expr_test(Expr::Literal(Literal::NUMBER(1.0)))))))),
     ), help("---1"));
-    assert_ne!(ExprTy::new(
+    assert_ne!(mk_expr_test(
         Expr::Unary(
             UnaryOp::MINUS,
-            ExprTy::new(Expr::Unary(
+            mk_expr_test(Expr::Unary(
                 UnaryOp::MINUS,
-                ExprTy::new(Expr::Unary(
+                mk_expr_test(Expr::Unary(
                     UnaryOp::MINUS,
-                    ExprTy::new(Expr::Literal(Literal::NUMBER(1.0)))))))),
+                    mk_expr_test(Expr::Literal(Literal::NUMBER(1.0)))))))),
     ), help("----1")); // wrong # of minuses
 }
 
 fn num(fl: f64) -> ExprTy {
-    ExprTy::new(Expr::Literal(Literal::NUMBER(fl)))
+    mk_expr_test(Expr::Literal(Literal::NUMBER(fl)))
 }
 
 #[test]
 fn test_precedence() {
-    let mult = ExprTy::new(Expr::Binary(
+    let mult = mk_expr_test(Expr::Binary(
         num(2.0),
         BinOp::MULT,
         num(8.0),
     ));
-    let add = ExprTy::new(Expr::Binary(
+    let add = mk_expr_test(Expr::Binary(
         num(1.0),
         BinOp::PLUS,
         mult.clone(),
     ));
     assert_eq!(mult, help("2 * 8"));
     assert_eq!(add, help("1 + 2 * 8"));
-    let lt = ExprTy::new(Expr::Binary(
+    let lt = mk_expr_test(Expr::Binary(
         add.clone(),
         BinOp::LESS,
         num(13.3)));
     assert_eq!(lt.clone(), help("1 + 2 * 8 < 13.3"));
-    let eqeq = ExprTy::new(
+    let eqeq = mk_expr_test(
         Expr::Binary(
             num(29.0),
             BinOp::EQUAL_EQUAL,
             lt));
     assert_eq!(eqeq, help("29 == 1 + 2 * 8 < 13.3"));
-    let not_five = ExprTy::new(
+    let not_five = mk_expr_test(
         Expr::Unary(
             UnaryOp::BANG,
             num(5.0)));
     assert_eq!(not_five.clone(), help("!5.0"));
-    let add_not_five = ExprTy::new(
+    let add_not_five = mk_expr_test(
         Expr::Binary(
             not_five.clone(),
             BinOp::PLUS,
             num(4.0)));
     assert_eq!(add_not_five.clone(), help("!5.0 + 4"));
-    let group = ExprTy::new(Expr::Grouping(mult.clone()));
+    let group = mk_expr_test(Expr::Grouping(mult.clone()));
     assert_eq!(
         group,
         help("(2 * 8)"));
-    let group_group = ExprTy::new(Expr::Grouping(group.clone()));
+    let group_group = mk_expr_test(Expr::Grouping(group.clone()));
     assert_eq!(group_group.clone(), help("((2*8))"));
 }
 
 #[test]
 fn test_primaries() {
     let one = num(1.0);
-    let hello = ExprTy::new(Expr::Literal(Literal::STRING("hello".into())));
-    let fls = ExprTy::new(Expr::Literal(Literal::BOOL(false)));
-    let tru = ExprTy::new(Expr::Literal(Literal::BOOL(true)));
-    let nil = ExprTy::new(Expr::Literal(Literal::NIL));
+    let hello = mk_expr_test(Expr::Literal(Literal::STRING("hello".into())));
+    let fls = mk_expr_test(Expr::Literal(Literal::BOOL(false)));
+    let tru = mk_expr_test(Expr::Literal(Literal::BOOL(true)));
+    let nil = mk_expr_test(Expr::Literal(Literal::NIL));
     assert_eq!(one.clone(), help("1"));
     assert_eq!(hello.clone(), help("   \"hello\""));
     assert_eq!(fls.clone(), help("false"));

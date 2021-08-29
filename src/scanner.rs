@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use crate::source_ref::SourceRef;
 
 lazy_static! {
     static ref KEYWORDS: HashMap<String, Token> = {
@@ -104,16 +105,15 @@ pub enum Token {
 #[derive(Debug, Clone, PartialOrd)]
 pub struct TokenInContext {
     pub token: Token,
-    pub lexeme: String,
-    pub line: usize,
+    pub context: SourceRef,
 }
 
 impl TokenInContext {
     pub fn simple(token: Token) -> TokenInContext {
-        TokenInContext { token, lexeme: String::from(""), line: 0 }
+        TokenInContext { token, context: SourceRef::new(0, 0, 0) }
     }
-    pub fn new(token: Token, lexeme: String, line: usize) -> TokenInContext {
-        TokenInContext { token, lexeme, line }
+    pub fn new(token: Token, offset: usize, len: usize, line: usize) -> TokenInContext {
+        TokenInContext { token, context: SourceRef::new(offset, len, line) }
     }
 }
 
@@ -171,8 +171,10 @@ impl Scanner {
         self.tokens.push(
             TokenInContext::new(
                 tt,
-                self.src.chars().skip(self.start).take(self.current - self.start).collect::<String>(),
-                self.line)
+                self.start,
+                self.current - self.start,
+                self.line,
+            )
         );
     }
     fn string(&mut self) -> Result<(), String> {
@@ -314,7 +316,12 @@ impl Scanner {
             }
             self.start = self.current;
         }
-        self.tokens.push(TokenInContext::new(Token::EOF, "EOF".to_string(), self.line + 1));
+        self.tokens.push(TokenInContext::new(
+            Token::EOF,
+            self.current,
+            self.current - self.start,
+            self.line,
+        ));
         Ok(self.tokens.clone())
     }
 }

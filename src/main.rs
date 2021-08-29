@@ -10,6 +10,7 @@ extern crate lazy_static;
 mod scanner;
 mod parser;
 mod interpreter;
+mod source_ref;
 
 use scanner::scanner;
 use parser::parse;
@@ -56,14 +57,14 @@ impl Lox {
     }
 
     fn run(&mut self, src: String) {
-        let tokens = match scanner(src) {
+        let tokens = match scanner(src.clone()) {
             Ok(t) => t,
             Err(( message, line)) => {
                 self.error(line, message);
                 return;
             }
         };
-        match parse(tokens) {
+        match parse(tokens, src) {
             Ok(ast) =>  {
                 println!("AST: {:?}", ast);
                 println!("=> {:?}", interpret(ast));

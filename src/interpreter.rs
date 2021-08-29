@@ -34,7 +34,7 @@ fn is_equal(left: &Literal, right: &Literal) -> Result<bool, RuntimeException> {
 }
 
 pub fn interpret(expr: ExprTy) -> Result<Literal, RuntimeException> {
-    match *expr {
+    match expr.expr {
         Expr::Binary(left, op, right) => {
             let left = interpret(left)?;
             let right = interpret(right)?;
@@ -71,14 +71,14 @@ pub fn interpret(expr: ExprTy) -> Result<Literal, RuntimeException> {
         Expr::Unary(op, inner) => {
             match op {
                 UnaryOp::BANG => {
-                    if let Expr::Literal(Literal::BOOL(bool_l)) = *inner {
+                    if let Expr::Literal(Literal::BOOL(bool_l)) = inner.expr {
                         Ok(Literal::BOOL(!bool_l))
                     } else {
                         Err(RuntimeException::new(format!("Cannot apply ! to a non-bool {:?}", inner)))
                     }
                 }
                 UnaryOp::MINUS => {
-                    if let Expr::Literal(Literal::NUMBER(num)) = *inner {
+                    if let Expr::Literal(Literal::NUMBER(num)) = inner.expr {
                         Ok(Literal::NUMBER(-num))
                     } else {
                         Err(RuntimeException::new(format!("Cannot apply - to a non-number {:?}", inner)))
