@@ -16,15 +16,17 @@ use scanner::scanner;
 use parser::parse;
 use crate::interpreter::{interpret};
 use crate::environment::Env;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 struct Lox {
     had_error: bool,
-    env: Env,
+    env: Rc<RefCell<Env>>,
 }
 
 impl Lox {
     fn new() -> Lox {
-        return Lox { had_error: false, env: Env::new() };
+        return Lox { had_error: false, env: Rc::new(RefCell::new(Env::new(None))) };
     }
     fn main(&mut self, args: Vec<String>) {
         if args.len() > 2 {
@@ -79,7 +81,7 @@ impl Lox {
             }
         };
 
-        match interpret(ast, &mut self.env) {
+        match interpret(ast, self.env.clone()) {
             Ok(value) => println!("=> {}", value),
             Err(err) => eprintln!("[{}] Error: {}\n           \"{}\"", err.context.line, &err.msg, err.context.source(&src))
         }

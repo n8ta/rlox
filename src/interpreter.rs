@@ -1,8 +1,12 @@
-use crate::parser::{ExprTy, Expr, UnaryOp, Stmt, Decl};
+use crate::parser::{ExprTy, Expr, UnaryOp, Stmt, ExprInContext};
 use crate::scanner::{Literal};
 use crate::parser::BinOp::{EQUAL_EQUAL, BANG_EQUAL, PLUS, SLASH, MINUS, MULT, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, AND, OR};
 use crate::source_ref::SourceRef;
 use crate::environment::Env;
+use crate::scanner::Literal::NIL;
+use std::rc::Rc;
+use std::cell::RefCell;
+use std::process::exit;
 
 
 #[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord)]
@@ -37,46 +41,68 @@ fn is_equal(left: &Literal, right: &Literal, context: SourceRef) -> Result<bool,
 }
 
 
-struct Interpreter<'a> {
-    env: &'a mut Env,
+struct Interpreter {
+    env: Rc<RefCell<Env>>,
 }
 
-impl<'a> Interpreter<'a> {
+impl Interpreter {
 
-    fn new(env: &'a mut Env) -> Interpreter { Interpreter { env } }
+    fn new(env: Rc<RefCell<Env>>) -> Interpreter { Interpreter { env } }
 
-    fn interpret(&mut self, decls: Vec<Decl>) -> Result<Literal, RuntimeException> {
+    fn interpret(&mut self, stmts: Vec<Stmt>) -> Result<Literal, RuntimeException> {
         let mut last = Literal::NIL;
-        for decl in decls {
-            last = self.execute_decl(decl)?
+        for stmt in stmts {
+            last = match stmt {
+                Stmt::Block(block_stmts) => self.interpret(block_stmts)?,
+                Stmt::Expr(expr) => self.execute_expr(expr)?,
+                Stmt::Print(val) => {
+                    println!("{}", self.execute_expr(val)?);
+                    NIL
+                },
+                Stmt::Variable(name, value) => {
+                    match value {
+                        // todo: fix source ref
+                        None => {
+                            let mut env = self.env.borrow_mut();
+                            env.assign(&name, &NIL, &SourceRef::new(0, 0, 0))
+                        }
+                        Some(lit) => {
+                            let mut env = self.env.clone();
+                            let mut envmut = env.borrow_mut();
+                            envmut.assign(&name, &self.execute_expr(lit)?, &SourceRef::new(0, 0, 0))
+                        },
+                    };
+                    NIL
+                }
+            }
         }
         Ok(last)
     }
 
-    fn execute_decl(&mut self, decl: Decl) -> Result<Literal, RuntimeException> {
-        match decl {
-            Decl::VarDecl(ident, value) => {
-                if let Some(expr) = value {
-                    let exp = self.execute_expr(expr)?;
-                    self.env.declare(&ident, &exp);
-                } else {
-                    self.env.declare(&ident, &Literal::NIL);
-                }
-                Ok(Literal::NIL)
-
-            },
-            Decl::Stmt(stmt) => {
-                match stmt {
-                    Stmt::Expr(expr) => self.execute_expr(expr),
-                    Stmt::Print(expr) => {
-                        let res = self.execute_expr(expr)?;
-                        println!("{}", res);
-                        Ok(res)
-                    }
-                }
-            }
-        }
-    }
+    // fn execute_decl(&mut self, decl: Decl) -> Result<Literal, RuntimeException> {
+    //     match decl {
+    //         Decl::VarDecl(ident, value) => {
+    //             if let Some(expr) = value {
+    //                 let exp = self.execute_expr(expr)?;
+    //                 self.env.declare(&ident, &exp);
+    //             } else {
+    //                 self.env.declare(&ident, &Literal::NIL);
+    //             }
+    //             Ok(Literal::NIL)
+    //
+    //         },
+    //         Decl::Stmt(stmt) => {
+    //             match stmt {
+    //                 Stmt::Expr(expr) => self.execute_expr(expr),
+    //                 Stmt::Print(expr) => {
+    //                     let res = self.execute_expr(expr)?;
+    //                     println!("{}", res);
+    //                     Ok(res)
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
 
     fn execute_expr(&mut self, expr: ExprTy) -> Result<Literal, RuntimeException> {
         match expr.expr {
@@ -131,17 +157,19 @@ impl<'a> Interpreter<'a> {
                     }
                 }
             }
-            Expr::Variable(var) => self.env.get(&var, &expr.context),
+            Expr::Variable(var) => {
+                self.env.borrow_mut().fetch(&var, &expr.context)
+            },
             Expr::Assign(var, new_val) => {
                 let value = self.execute_expr(new_val)?;
-                self.env.assign(&var, &value, &expr.context);
+                self.env.borrow_mut().assign(&var, &value, &expr.context);
                 Ok(Literal::NIL)
             }
         }
     }
 }
 
-pub fn interpret(decls: Vec<Decl>, env: &mut Env) -> Result<Literal, RuntimeException> {
+pub fn interpret(stmts: Vec<Stmt>, env: Rc<RefCell<Env>>) -> Result<Literal, RuntimeException> {
     let mut interp = Interpreter::new(env);
-    interp.interpret(decls)
+    interp.interpret(stmts)
 }

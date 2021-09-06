@@ -2,11 +2,10 @@ use crate::scanner::{Token, TokenInContext, Literal};
 use crate::scanner;
 use crate::scanner::Token::{MINUS, AND, OR, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, SLASH, MULT, LITERAL, LPAREN, RPAREN, BANG_EQUAL, EQUAL_EQUAL, VAR, SEMICOLON};
 use crate::source_ref::SourceRef;
-use crate::parser::Decl::VarDecl;
 
 type Tokens = Vec<TokenInContext>;
 
-pub fn parse<'a>(tokens: Tokens, source: &'a str) -> Result<Vec<Decl>, String> {
+pub fn parse<'a>(tokens: Tokens, source: &'a str) -> Result<Vec<Stmt>, String> {
     let mut parser: Parser<'a> = Parser::new(tokens, source);
     parser.parse()
 }
@@ -36,15 +35,11 @@ impl ExprInContext {
 }
 
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
-pub enum Decl {
-    VarDecl(String, Option<ExprTy>),
-    Stmt(Stmt),
-}
-
-#[derive(Clone, PartialOrd, PartialEq, Debug)]
 pub enum Stmt {
+    Block(Vec<Stmt>),
     Expr(ExprTy),
     Print(ExprTy),
+    Variable(String, Option<ExprTy>),
 }
 
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
@@ -119,12 +114,12 @@ impl<'a> Parser<'a> {
         Parser { tokens, current: 0, source }
     }
 
-    fn parse(&mut self) -> Result<Vec<Decl>, String> {
-        let mut decls: Vec<Decl> = vec![];
+    fn parse(&mut self) -> Result<Vec<Stmt>, String> {
+        let mut stmts: Vec<Stmt> = vec![];
         while !self.is_at_end() {
-            decls.push(self.declaration()?)
+            stmts.push(self.declaration()?)
         }
-        Ok(decls)
+        Ok(stmts)
     }
 
     fn check(&mut self, typ: Token) -> bool {
@@ -193,7 +188,7 @@ impl<'a> Parser<'a> {
         self.previous().unwrap()
     }
 
-    fn declaration(&mut self) -> Result<Decl, String> {
+    fn declaration(&mut self) -> Result<Stmt, String> {
         if self.matches(vec![VAR]) {
             match self.variable_declaration() {
                 Ok(stmt) => Ok(stmt),
@@ -204,7 +199,7 @@ impl<'a> Parser<'a> {
             }
         } else {
             match self.statement() {
-                Ok(decl) => Ok(Decl::Stmt(decl)),
+                Ok(stmt) => Ok(stmt),
                 Err(msg) => {
                     self.synchronize();
                     Err(msg)
@@ -213,7 +208,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn variable_declaration(&mut self) -> Result<Decl, String> {
+    fn variable_declaration(&mut self) -> Result<Stmt, String> {
         let name = self.consume(Token::IDENTIFIER(format!("")), "Expect variable name.").unwrap();
         let mut init: Option<ExprTy> = None;
         if self.matches(vec![Token::EQUAL]) {
@@ -222,7 +217,7 @@ impl<'a> Parser<'a> {
         }
         self.consume(SEMICOLON, "Expected ';' after variable declaration");
         if let Token::IDENTIFIER(str) = name.token {
-            return Ok(Decl::VarDecl(str.clone(), init));
+            return Ok(Stmt::Variable(str.clone(), init));
         }
         Err(format!("FAILED didnt find a IDENT where expected"))
     }
@@ -253,9 +248,20 @@ impl<'a> Parser<'a> {
     fn statement(&mut self) -> Result<Stmt, String> {
         if self.matches(vec![Token::PRINT]) {
             self.print_statement()
+        } else if self.matches(vec![Token::LBRACE]) {
+            self.block()
         } else {
             self.expression_statement()
         }
+    }
+
+    fn block(&mut self) -> Result<Stmt, String> {
+        let mut stmts: Vec<Stmt> = vec![];
+        while !self.check(Token::RBRACE) && !self.is_at_end() {
+            stmts.push(self.declaration()?)
+        }
+        self.consume(Token::RBRACE, "Expected block to end with an '}'.");
+        Ok(Stmt::Block(stmts))
     }
 
     fn print_statement(&mut self) -> Result<Stmt, String> {
@@ -379,12 +385,9 @@ fn help(str: &str) -> ExprTy {
     let mut tokens = scanner(str.to_string()).unwrap();
     tokens.pop();
     let res = parse(tokens, "").unwrap();
-    match res[0].clone() {
-        Decl::VarDecl(_, _) => panic!("cannot handle var dec"),
-        Decl::Stmt(stmt) => match stmt {
-            Stmt::Expr(expr) => expr,
-            Stmt::Print(_) => panic!("helped cannot handle print"),
-        }
+    match &res[0] {
+        Stmt::Expr(expr) => expr.clone(),
+        _ => panic!("cannot handle non-expr"),
     }
 }
 
@@ -493,10 +496,9 @@ fn test_primaries() {
 
 #[test]
 fn test_decl() {
-    let ast = VarDecl(format!("varname"),
-                      Some(ExprTy::new(ExprInContext::new(
-                          Expr::Literal(Literal::NUMBER(1.0)),
-                          SourceRef::new(0, 0, 0)))));
+    let ast = Stmt::Variable(format!("varname"), Option::from(ExprTy::new(ExprInContext::new(
+        Expr::Literal(Literal::NUMBER(1.0)),
+        SourceRef::new(0, 0, 0)))));
     let src = "var varname = 1.0;";
     let tokens = scanner(src.to_string()).unwrap();
     assert_eq!(parse(tokens, src).unwrap(), vec![ast]);
@@ -511,7 +513,7 @@ fn test_assign() {
                                                        SourceRef::new(10, 3, 0)))),
                                   SourceRef::new(0, 13, 0));
 
-    let ast = vec![Decl::Stmt(Stmt::Expr(Box::new(expr)))];
+    let ast = vec![Stmt::Expr(Box::new(expr))];
 
     let src = "varname = 1.0;";
     let tokens = scanner(src.to_string()).unwrap();

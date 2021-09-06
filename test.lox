@@ -3,3 +3,4 @@ var x = 3;
 x = x * 8;
 x = y * x;
 print x;
+print y;
