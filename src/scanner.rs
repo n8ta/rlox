@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use crate::source_ref::SourceRef;
 use std::fmt::{Display, Formatter};
 use crate::scanner::Token::IDENTIFIER;
+use std::rc::Rc;
 
 lazy_static! {
     static ref KEYWORDS: HashMap<String, Token> = {
@@ -129,10 +130,10 @@ impl Display for TokenInContext {
 
 impl TokenInContext {
     pub fn simple(token: Token) -> TokenInContext {
-        TokenInContext { token, context: SourceRef::new(0, 0, 0) }
+        TokenInContext { token, context: SourceRef::new(0, 0, 0, Rc::new(String::from(""))) }
     }
-    pub fn new(token: Token, offset: usize, len: usize, line: usize) -> TokenInContext {
-        TokenInContext { token, context: SourceRef::new(offset, len, line) }
+    pub fn new(token: Token, offset: usize, len: usize, line: usize, src: Rc<String>) -> TokenInContext {
+        TokenInContext { token, context: SourceRef::new(offset, len, line, src) }
     }
 }
 
@@ -194,13 +195,13 @@ impl PartialEq for TokenInContext {
     }
 }
 
-pub fn scanner(src: String) -> ScannerResult {
+pub fn scanner(src: Rc<String>) -> ScannerResult {
     let mut scanner = Scanner::new(src);
     scanner.scan_tokens()
 }
 
 struct Scanner {
-    src: String,
+    src: Rc<String>,
     start: usize,
     current: usize,
     line: usize,
@@ -208,7 +209,7 @@ struct Scanner {
 }
 
 impl Scanner {
-    fn new(src: String) -> Scanner { Scanner { src, start: 0, current: 0, line: 0, tokens: vec![] } }
+    fn new(src: Rc<String>) -> Scanner { Scanner { src, start: 0, current: 0, line: 0, tokens: vec![] } }
     fn is_at_end(&self) -> bool {
         self.current >= self.src.chars().count()
     }
@@ -224,6 +225,7 @@ impl Scanner {
                 self.start,
                 self.current - self.start,
                 self.line,
+            self.src.clone(),
             )
         );
     }
@@ -368,6 +370,7 @@ impl Scanner {
             self.current,
             self.current - self.start,
             self.line,
+            self.src.clone(),
         ));
         Ok(self.tokens.clone())
     }
@@ -375,7 +378,7 @@ impl Scanner {
 
 // Unwraps scanner result for easy tests
 fn test_scanner(src: String) -> Vec<TokenInContext> {
-    let mut scanner = Scanner::new(src);
+    let mut scanner = Scanner::new(Rc::new(src));
     let mut tokens = scanner.scan_tokens().unwrap();
     tokens.pop(); // remove EOF
     tokens

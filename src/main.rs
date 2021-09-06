@@ -41,7 +41,8 @@ impl Lox {
 
     fn run_file(&mut self, filename: &str) {
         if let Ok(contents) = read_to_string(filename) {
-            self.run(contents);
+            let file = Rc::new(contents);
+            self.run(file);
             if self.had_error {
                 exit(-1);
             }
@@ -56,11 +57,12 @@ impl Lox {
         loop {
             let mut line_contents = String::new();
             reader.read_line(&mut line_contents).unwrap();
-            self.run(line_contents);
+            let line = Rc::new(line_contents);
+            self.run(line);
         }
     }
 
-    fn run(&mut self, src: String) {
+    fn run(&mut self, src: Rc<String>) {
         let tokens = match scanner(src.clone()) {
             Ok(t) => t,
             Err((message, line)) => {
@@ -68,7 +70,7 @@ impl Lox {
                 return;
             }
         };
-        let ast = match parse(tokens, &src) {
+        let ast = match parse(tokens, src.clone()) {
             Ok(ast) => {
                 for item in ast.iter() {}
                 ast
@@ -81,7 +83,7 @@ impl Lox {
 
         match interpret(ast, self.env.clone()) {
             Ok(value) => println!("=> {}", value),
-            Err(err) => eprintln!("[{}] Error: {}\n           \"{}\"", err.context.line, &err.msg, err.context.source(&src))
+            Err(err) => eprintln!("[{}] Error: {}\n           \"{}\"", err.context.line, &err.msg, err.context.source())
         }
     }
 

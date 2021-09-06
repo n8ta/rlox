@@ -57,7 +57,7 @@ impl Env {
 #[test]
 fn set_get() {
     let mut env = Env::new(None);
-    let src = SourceRef::new(0, 0, 0);
+    let src = SourceRef::new(0, 0, 0, Rc::new(String::from("testing")));
     for i in 0..100 {
         env.declare(&format!("val-{}", i), &Literal::NUMBER(i as f64));
     }
@@ -74,6 +74,6 @@ fn set_get() {
 #[should_panic]
 fn get_unset() {
     let mut env = Env::new(None);
-    let src = SourceRef::new(0, 0, 0);
+    let src = SourceRef::new(0, 0, 0, Rc::new(String::from("test")));
     env.fetch("key", &src).unwrap();
 }

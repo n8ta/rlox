@@ -22,11 +22,11 @@ impl RuntimeException {
     }
 }
 
-fn is_num(lit: Literal) -> Result<f64, RuntimeException> {
+fn is_num(lit: Literal, context: &SourceRef) -> Result<f64, RuntimeException> {
     if let Literal::NUMBER(num) = lit {
         Ok(num)
     } else {
-        Err(RuntimeException::new(format!("Expected a number found {:?}", lit), SourceRef::new(0, 0, 0)))
+        Err(RuntimeException::new(format!("Expected a number found {:?}", lit), context.clone()))
     }
 }
 
@@ -83,6 +83,9 @@ impl Interpreter {
     fn execute_expr(&mut self, expr: ExprTy) -> Result<Literal, RuntimeException> {
         match expr.expr {
             Expr::Binary(left, op, right) => {
+
+                let context = left.context.merge(&right.context);
+
                 let left = self.execute_expr(left)?;
                 let right = self.execute_expr(right)?;
                 Ok(match op {
@@ -91,13 +94,13 @@ impl Interpreter {
                     BANG_EQUAL => Literal::BOOL(!is_equal(&left, &right, expr.context)?),
 
                     // NUM
-                    LESS => Literal::BOOL(is_num(left)? < is_num(right)?),
-                    LESS_EQUAL => Literal::BOOL(is_num(left)? <= is_num(right)?),
-                    SLASH => Literal::NUMBER(is_num(left)? / is_num(right)?),
-                    MULT => Literal::NUMBER(is_num(left)? * is_num(right)?),
-                    MINUS => Literal::NUMBER(is_num(left)? - is_num(right)?),
-                    GREATER => Literal::BOOL(is_num(left)? > is_num(right)?),
-                    GREATER_EQUAL => Literal::BOOL(is_num(left)? >= is_num(right)?),
+                    LESS => Literal::BOOL(is_num(left, &context)? < is_num(right, &context)?),
+                    LESS_EQUAL => Literal::BOOL(is_num(left, &context)? <= is_num(right, &context)?),
+                    SLASH => Literal::NUMBER(is_num(left, &context)? / is_num(right, &context)?),
+                    MULT => Literal::NUMBER(is_num(left, &context)? * is_num(right, &context)?),
+                    MINUS => Literal::NUMBER(is_num(left, &context)? - is_num(right, &context)?),
+                    GREATER => Literal::BOOL(is_num(left, &context)? > is_num(right, &context)?),
+                    GREATER_EQUAL => Literal::BOOL(is_num(left, &context)? >= is_num(right, &context)?),
 
                     // STRING OR NUM
                     PLUS => {

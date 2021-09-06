@@ -2,24 +2,25 @@ use crate::scanner::{Token, TokenInContext, Literal};
 use crate::scanner;
 use crate::scanner::Token::{MINUS, AND, OR, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, SLASH, MULT, LITERAL, LPAREN, RPAREN, BANG_EQUAL, EQUAL_EQUAL, VAR, SEMICOLON};
 use crate::source_ref::SourceRef;
+use std::rc::Rc;
 
 type Tokens = Vec<TokenInContext>;
 
-pub fn parse<'a>(tokens: Tokens, source: &'a str) -> Result<Vec<Stmt>, String> {
-    let mut parser: Parser<'a> = Parser::new(tokens, source);
+pub fn parse(tokens: Tokens, source: Rc<String>) -> Result<Vec<Stmt>, String> {
+    let mut parser: Parser = Parser::new(tokens, source);
     parser.parse()
 }
 
 /// Used in tests
-fn parse_expr<'a>(tokens: Tokens, source: &'a str) -> ExprTy {
+fn parse_expr(tokens: Tokens, source: Rc<String>) -> ExprTy {
     let mut parser = Parser::new(tokens, source);
     parser.expression().unwrap()
 }
 
-struct Parser<'a> {
+struct Parser {
     tokens: Tokens,
     current: usize,
-    source: &'a str,
+    source: Rc<String>,
 }
 
 pub type ExprTy = Box<ExprInContext>;
@@ -121,8 +122,8 @@ impl UnaryOp {
 
 type ExprResult = Result<ExprTy, String>;
 
-impl<'a> Parser<'a> {
-    fn new(tokens: Tokens, source: &'a str) -> Parser {
+impl Parser {
+    fn new(tokens: Tokens, source: Rc<String>) -> Parser {
         Parser { tokens, current: 0, source }
     }
 
@@ -388,20 +389,20 @@ impl<'a> Parser<'a> {
         // if self.matches(vec![Token::IDENTIFIER]) {
         //     return Ok(mk_expr(Expr::Variable(self.previous().unwrap().), self.previous().unwrap().context));
         // }
-        Err(format!("Failed to match any expression for {}", self.tokens[self.current].context.source(&self.source)))
+        Err(format!("Failed to match any expression for {}", self.tokens[self.current].context.source()))
     }
 }
 
 /// Turn a string into an expression to write simple tests
 fn help(str: &str) -> ExprTy {
-    let mut tokens = scanner(str.to_string()).unwrap();
+    let mut tokens = scanner(Rc::new(str.to_string())).unwrap();
     tokens.pop();
-    parse_expr(tokens, "")
+    parse_expr(tokens, Rc::new(String::from("")))
 }
 
 
 fn mk_expr_test(expr: Expr) -> ExprTy {
-    Box::new(ExprInContext::new(expr, SourceRef::new(0, 0, 0)))
+    Box::new(ExprInContext::new(expr, SourceRef::new(0, 0, 0, Rc::new("".to_string()))))
 }
 
 
@@ -504,26 +505,30 @@ fn test_primaries() {
 
 #[test]
 fn test_decl() {
+    let src = Rc::new(String::from("var varname = 1.0;"));
     let ast = Stmt::Variable(format!("varname"), Option::from(ExprTy::new(ExprInContext::new(
         Expr::Literal(Literal::NUMBER(1.0)),
-        SourceRef::new(0, 0, 0)))));
-    let src = "var varname = 1.0;";
-    let tokens = scanner(src.to_string()).unwrap();
-    assert_eq!(parse(tokens, src).unwrap(), vec![ast]);
+        SourceRef::new(0, 0, 0, src.clone())))));
+    let tokens = scanner(src.clone()).unwrap();
+    assert_eq!(parse(tokens, src.clone()).unwrap(), vec![ast]);
 }
 
 #[test]
 fn test_assign() {
+    let src = Rc::new("varname = 1.0;".to_string());
+
+    let context = SourceRef::new(10, 3, 0, src.clone());
+    let context2 = SourceRef::new(0, 13, 0, src.clone());
     let expr = ExprInContext::new(Expr::Assign(format!("varname"),
                                                Box::new(
                                                    ExprInContext::new(
                                                        Expr::Literal(scanner::Literal::NUMBER(1.0)),
-                                                       SourceRef::new(10, 3, 0)))),
-                                  SourceRef::new(0, 13, 0));
+                                                       context
+                                                   ))),
+                                  context2);
 
     let ast = vec![Stmt::Expr(Box::new(expr))];
 
-    let src = "varname = 1.0;";
-    let tokens = scanner(src.to_string()).unwrap();
-    assert_eq!(parse(tokens, src).unwrap()[0], ast[0]);
+    let tokens = scanner(src.clone()).unwrap();
+    assert_eq!(parse(tokens, src.clone()).unwrap()[0], ast[0]);
 }

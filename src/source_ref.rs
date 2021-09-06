@@ -1,4 +1,5 @@
 use std::cmp::{min, max};
+use std::rc::Rc;
 
 #[derive(Clone, PartialOrd, PartialEq, Ord, Eq, Debug)]
 pub struct SourceRef {
@@ -6,31 +7,33 @@ pub struct SourceRef {
     pub offset: usize,
     pub len: usize,
     pub line: usize,
+    src: Rc<String>,
 }
 
 impl SourceRef {
-    pub fn new(offset: usize, len: usize, line: usize) -> SourceRef {
-        SourceRef { offset, len, line }
+    pub fn new(offset: usize, len: usize, line: usize, src: Rc<String>) -> SourceRef {
+        SourceRef { offset, len, line, src }
     }
     pub fn merge(&self, other: &SourceRef) -> SourceRef {
         let start = min(other.offset, self.offset);
         let end = max(self.offset + self.len, other.offset + other.len);
-        SourceRef { offset: start, len: end - start, line: min(self.line, other.line) }
+        SourceRef { offset: start, len: end - start, line: min(self.line, other.line), src: self.src.clone() }
     }
-    pub fn source(&self, src: &str) -> String {
-        src.chars().skip(self.offset).take(self.len).collect()
+    pub fn source(&self) -> String {
+        self.src.chars().skip(self.offset).take(self.len).collect()
     }
 }
 
 #[test]
 fn merging() {
-    let a = SourceRef::new(0, 2, 0);
-    let b = SourceRef::new(6, 2, 0);
-    let c = SourceRef::new(1, 2, 0);
+    let src = Rc::new(format!("Hello!"));
+    let a = SourceRef::new(0, 2, 0, src.clone());
+    let b = SourceRef::new(6, 2, 0, src.clone());
+    let c = SourceRef::new(1, 2, 0, src.clone());
 
-    assert_eq!(a.merge(&b), SourceRef::new(0, 8, 0));
-    assert_eq!(a.merge(&c), SourceRef::new(0, 3, 0));
-    assert_ne!(a.merge(&c), SourceRef::new(0, 4, 0));
+    assert_eq!(a.merge(&b), SourceRef::new(0, 8, 0, src.clone()));
+    assert_eq!(a.merge(&c), SourceRef::new(0, 3, 0, src.clone()));
+    assert_ne!(a.merge(&c), SourceRef::new(0, 4, 0, src.clone()));
 
     assert_eq!(a.merge(&c), c.merge(&a));
     assert_eq!(a.merge(&b), b.merge(&a));
@@ -39,13 +42,13 @@ fn merging() {
 
 #[test]
 fn source() {
-    let src = "this is my source";
-    let a = SourceRef::new(0, 4, 0 );
-    let b = SourceRef::new(5, 2, 0);
-    let c = SourceRef::new(0, src.chars().count(), 0);
+    let src = Rc::new("this is my source".to_string());
+    let a = SourceRef::new(0, 4, 0, src.clone());
+    let b = SourceRef::new(5, 2, 0, src.clone());
+    let c = SourceRef::new(0, src.chars().count(), 0, src.clone());
 
-    assert_eq!(a.source(src), "this");
-    assert_eq!(b.source(src), "is");
-    assert_eq!(c.source(src), "this is my source");
+    assert_eq!(a.source(), "this");
+    assert_eq!(b.source(), "is");
+    assert_eq!(c.source(), "this is my source");
 
 }
