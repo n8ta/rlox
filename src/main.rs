@@ -71,10 +71,7 @@ impl Lox {
             }
         };
         let ast = match parse(tokens, src.clone()) {
-            Ok(ast) => {
-                for item in ast.iter() {}
-                ast
-            }
+            Ok(ast) => ast,
             Err(err) => {
                 eprintln!("{}", err);
                 return;

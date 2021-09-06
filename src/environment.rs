@@ -3,7 +3,7 @@ use crate::scanner::Literal;
 use crate::interpreter::RuntimeException;
 use crate::source_ref::SourceRef;
 use std::rc::Rc;
-use std::cell::{Cell, RefCell};
+use std::cell::{RefCell};
 
 pub struct Env {
     env: HashMap<String, Literal>,
@@ -18,18 +18,18 @@ impl Env {
     }
 
     pub fn fetch(&mut self, key: &str, context: &SourceRef) -> Result<Literal, RuntimeException> {
-        let mut result = None;
-        {
-            result = self.env.get(key);
-        }
+        let result = self.env.get(key);
         if let Some(res) = result {
             return Ok(res.clone());
         };
 
         if let Some(parent) = self.enclosing.clone() {
-            let mut parent = parent.clone();
+            let parent = parent.clone();
             let mut env = parent.borrow_mut();
-            return env.fetch(key, context);
+            let parent_get = env.fetch(key, context);
+            if parent_get.is_ok() {
+                return parent_get;
+            }
         }
         return Err(RuntimeException::new(format!("Variable {} is undefined", key), context.clone()));
     }
@@ -40,9 +40,7 @@ impl Env {
                 match &mut self.enclosing {
                     None => Err(RuntimeException::new(format!("Cannot assign to {} it hasn't been declared", key), context.clone())),
                     Some(enclosing) => {
-                        let mut enclosing = enclosing.clone();
-                        let mut parent = enclosing.borrow_mut();
-                        parent.assign(key, value, context)
+                        enclosing.clone().borrow_mut().assign(key, value, context)
                     }
                 }
             }
@@ -64,9 +62,9 @@ fn set_get() {
     for i in 0..100 {
         assert_eq!(env.fetch(&format!("val-{}", i), &src).unwrap(), Literal::NUMBER(i as f64));
     }
-    env.assign("val-10", &Literal::NUMBER(12.3), &src);
-    env.assign("val-10", &Literal::NUMBER(14.3), &src);
-    env.assign("val-10", &Literal::NUMBER(15.3), &src);
+    env.assign("val-10", &Literal::NUMBER(12.3), &src).unwrap();
+    env.assign("val-10", &Literal::NUMBER(14.3), &src).unwrap();
+    env.assign("val-10", &Literal::NUMBER(15.3), &src).unwrap();
     assert_eq!(env.fetch("val-10", &src).unwrap(), Literal::NUMBER(15.3));
 }
 

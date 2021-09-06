@@ -129,9 +129,6 @@ impl Display for TokenInContext {
 }
 
 impl TokenInContext {
-    pub fn simple(token: Token) -> TokenInContext {
-        TokenInContext { token, context: SourceRef::new(0, 0, 0, Rc::new(String::from(""))) }
-    }
     pub fn new(token: Token, offset: usize, len: usize, line: usize, src: Rc<String>) -> TokenInContext {
         TokenInContext { token, context: SourceRef::new(offset, len, line, src) }
     }

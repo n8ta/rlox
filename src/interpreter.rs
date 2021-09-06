@@ -1,4 +1,4 @@
-use crate::parser::{ExprTy, Expr, UnaryOp, Stmt, ExprInContext};
+use crate::parser::{ExprTy, Expr, UnaryOp, Stmt};
 use crate::scanner::{Literal};
 use crate::parser::BinOp::{EQUAL_EQUAL, BANG_EQUAL, PLUS, SLASH, MINUS, MULT, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, AND, OR};
 use crate::source_ref::SourceRef;
@@ -6,7 +6,6 @@ use crate::environment::Env;
 use crate::scanner::Literal::NIL;
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::process::exit;
 
 
 #[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord)]
@@ -67,10 +66,8 @@ impl Interpreter {
                             env.declare(&name, &NIL);
                         }
                         Some(lit) => {
-                            let mut env = self.env.clone();
-                            let mut envmut = env.borrow_mut();
                             let value = &self.execute_expr(lit)?;
-                            envmut.declare(&name, value);
+                            self.env.clone().borrow_mut().declare(&name, value);
                         },
                     };
                     NIL
@@ -141,7 +138,7 @@ impl Interpreter {
             },
             Expr::Assign(var, new_val) => {
                 let value = self.execute_expr(new_val)?;
-                self.env.borrow_mut().assign(&var, &value, &expr.context);
+                self.env.borrow_mut().assign(&var, &value, &expr.context)?;
                 Ok(Literal::NIL)
             }
         }
