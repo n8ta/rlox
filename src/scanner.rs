@@ -76,6 +76,8 @@ impl Display for Literal {
     }
 }
 
+#[allow(dead_code)]
+#[allow(unused_mut)]
 #[allow(non_camel_case_types)]
 #[derive(PartialEq, PartialOrd, Clone, Debug)]
 pub enum Token {

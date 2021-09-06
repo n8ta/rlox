@@ -45,19 +45,25 @@ struct Interpreter {
 }
 
 impl Interpreter {
-
     fn new(env: Rc<RefCell<Env>>) -> Interpreter { Interpreter { env } }
 
     fn interpret(&mut self, stmts: Vec<Stmt>) -> Result<Literal, RuntimeException> {
         let mut last = Literal::NIL;
         for stmt in stmts {
             last = match stmt {
-                Stmt::Block(block_stmts) => self.interpret(block_stmts)?,
+                Stmt::Block(block_stmts) => {
+                    let parent = self.env.clone();
+                    let new_scope = Rc::new(RefCell::new(Env::new(Some(parent.clone()))));
+                    self.env = new_scope;
+                    let res = self.interpret(block_stmts);
+                    self.env = parent;
+                    res?
+                }
                 Stmt::Expr(expr) => self.execute_expr(expr)?,
                 Stmt::Print(val) => {
                     println!("{}", self.execute_expr(val)?);
                     NIL
-                },
+                }
                 Stmt::Variable(name, value) => {
                     match value {
                         // todo: fix source ref
@@ -68,9 +74,19 @@ impl Interpreter {
                         Some(lit) => {
                             let value = &self.execute_expr(lit)?;
                             self.env.clone().borrow_mut().declare(&name, value);
-                        },
+                        }
                     };
                     NIL
+                }
+                Stmt::If(test, then_branch, else_branch) => {
+                    let res = self.execute_expr(test)?;
+                    if res.truthy() {
+                        self.interpret(vec![*then_branch])?
+                    } else if let Some(else_branch) = else_branch {
+                        self.interpret(vec![*else_branch])?
+                    } else {
+                        NIL
+                    }
                 }
             }
         }
@@ -80,7 +96,6 @@ impl Interpreter {
     fn execute_expr(&mut self, expr: ExprTy) -> Result<Literal, RuntimeException> {
         match expr.expr {
             Expr::Binary(left, op, right) => {
-
                 let context = left.context.merge(&right.context);
 
                 let left = self.execute_expr(left)?;
@@ -135,7 +150,7 @@ impl Interpreter {
             }
             Expr::Variable(var) => {
                 self.env.borrow_mut().fetch(&var, &expr.context)
-            },
+            }
             Expr::Assign(var, new_val) => {
                 let value = self.execute_expr(new_val)?;
                 self.env.borrow_mut().assign(&var, &value, &expr.context)?;

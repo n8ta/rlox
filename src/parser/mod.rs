@@ -15,6 +15,7 @@ pub fn parse(tokens: Tokens, source: Rc<String>) -> Result<Vec<Stmt>, String> {
 }
 
 
+#[allow(dead_code)]
 struct Parser {
     tokens: Tokens,
     current: usize,
@@ -47,10 +48,11 @@ impl PartialEq for ExprInContext {
 
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
 pub enum Stmt {
-    Block(Vec<Stmt>),
     Expr(ExprTy),
+    Block(Vec<Stmt>),
     Print(ExprTy),
     Variable(String, Option<ExprTy>),
+    If(ExprTy, Box<Stmt>, Option<Box<Stmt>>)
 }
 
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
@@ -261,9 +263,23 @@ impl Parser {
             self.print_statement()
         } else if self.matches(vec![Token::LBRACE]) {
             self.block()
+        } else if self.matches(vec![Token::IF]) {
+            self.if_statement()
         } else {
             self.expression_statement()
         }
+    }
+
+    fn if_statement(&mut self) -> Result<Stmt, String> {
+        self.consume(Token::LPAREN, "Expected '(' after 'if'")?;
+        let test = self.expression()?;
+        self.consume(Token::RPAREN, "Expected ')' after `if (... ")?;
+        let if_branch = self.statement()?;
+        let mut else_branch: Option<Box<Stmt>> = None;
+        if self.matches(vec![Token::ELSE]) {
+            else_branch = Some(Box::new(self.statement()?));
+        }
+        Ok(Stmt::If(test, Box::new(if_branch), else_branch))
     }
 
     fn block(&mut self) -> Result<Stmt, String> {

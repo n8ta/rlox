@@ -11,6 +11,7 @@ mod parser;
 mod interpreter;
 mod source_ref;
 mod environment;
+mod e2e_tests;
 
 use scanner::scanner;
 use parser::parse;
@@ -62,7 +63,7 @@ impl Lox {
         }
     }
 
-    fn run(&mut self, src: Rc<String>) {
+    pub fn run(&mut self, src: Rc<String>) {
         let tokens = match scanner(src.clone()) {
             Ok(t) => t,
             Err((message, line)) => {
@@ -79,7 +80,7 @@ impl Lox {
         };
 
         match interpret(ast, self.env.clone()) {
-            Ok(value) => println!("=> {}", value),
+            Ok(_) => {},
             Err(err) => eprintln!("[{}] Error: {}\n           \"{}\"", err.context.line, &err.msg, err.context.source())
         }
     }

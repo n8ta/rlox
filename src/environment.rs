@@ -75,3 +75,13 @@ fn get_unset() {
     let src = SourceRef::new(0, 0, 0, Rc::new(String::from("test")));
     env.fetch("key", &src).unwrap();
 }
+
+#[test]
+fn pull_from_parent() {
+    let src = SourceRef::new(0, 0, 0, Rc::new(String::from("aksjdflaksjfklas")));
+    let lit = Literal::STRING(format!("Helllloooo!"));
+    let parent = Rc::new(RefCell::new(Env::new(None)));
+    let mut env = Env::new(Some(parent.clone()));
+    parent.borrow_mut().declare("hello", &lit);
+    assert_eq!(env.fetch("hello", &src).unwrap(), lit);
+}
