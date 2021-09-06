@@ -6,23 +6,25 @@ use std::io::{BufReader, BufRead};
 #[macro_use(lazy_static)]
 extern crate lazy_static;
 
-
 mod scanner;
 mod parser;
 mod interpreter;
 mod source_ref;
+mod environment;
 
 use scanner::scanner;
 use parser::parse;
-use crate::interpreter::interpret;
+use crate::interpreter::{interpret};
+use crate::environment::Env;
 
 struct Lox {
     had_error: bool,
+    env: Env,
 }
 
 impl Lox {
     fn new() -> Lox {
-        return Lox { had_error: false };
+        return Lox { had_error: false, env: Env::new() };
     }
     fn main(&mut self, args: Vec<String>) {
         if args.len() > 2 {
@@ -59,17 +61,27 @@ impl Lox {
     fn run(&mut self, src: String) {
         let tokens = match scanner(src.clone()) {
             Ok(t) => t,
-            Err(( message, line)) => {
+            Err((message, line)) => {
                 self.error(line, message);
                 return;
             }
         };
-        match parse(tokens, src) {
-            Ok(ast) =>  {
-                println!("AST: {:?}", ast);
-                println!("=> {:?}", interpret(ast));
-            },
-            Err(err) => eprintln!("{}", err),
+        let ast = match parse(tokens, &src) {
+            Ok(ast) => {
+                for item in ast.iter() {
+                    println!("{:?}", item)
+                }
+                ast
+            }
+            Err(err) => {
+                eprintln!("{}", err);
+                return;
+            }
+        };
+
+        match interpret(ast, &mut self.env) {
+            Ok(value) => println!("=> {}", value),
+            Err(err) => eprintln!("[{}] Error: {}\n           \"{}\"", err.context.line, &err.msg, err.context.source(&src))
         }
     }
 

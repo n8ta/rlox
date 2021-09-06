@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use crate::source_ref::SourceRef;
+use std::fmt::{Display, Formatter};
+use crate::scanner::Token::IDENTIFIER;
 
 lazy_static! {
     static ref KEYWORDS: HashMap<String, Token> = {
@@ -62,6 +64,17 @@ impl Literal {
     }
 }
 
+impl Display for Literal {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Literal::STRING(str) => f.write_str(str),
+            Literal::NUMBER(num) => f.write_str(&num.to_string()),
+            Literal::BOOL(bol) => f.write_str(if *bol { "true" } else { "false" }),
+            Literal::NIL => f.write_str("nil"),
+        }
+    }
+}
+
 #[allow(non_camel_case_types)]
 #[derive(PartialEq, PartialOrd, Clone, Debug)]
 pub enum Token {
@@ -77,7 +90,7 @@ pub enum Token {
     BANG,
     MINUS,
     LITERAL(Literal),
-    IDENTIFIER,
+    IDENTIFIER(String),
     SEMICOLON,
     COMMA,
     DOT,
@@ -108,6 +121,12 @@ pub struct TokenInContext {
     pub context: SourceRef,
 }
 
+impl Display for TokenInContext {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&format!("{:?}", self.token))
+    }
+}
+
 impl TokenInContext {
     pub fn simple(token: Token) -> TokenInContext {
         TokenInContext { token, context: SourceRef::new(0, 0, 0) }
@@ -122,12 +141,43 @@ type ScannerResult = Result<Vec<TokenInContext>, (String, usize)>;
 impl Token {
     /// Compare two tokens by type only
     pub(crate) fn type_equal(&self, other: &Token) -> bool {
-        match self {
-            Token::LITERAL(lit1) => match other {
-                Token::LITERAL(lit2) => lit1.type_equal(lit2),
-                _ => false,
-            }
-            _ => *self == *other,
+        match (self, other) {
+            (Token::PLUS, Token::PLUS) => true,
+            (Token::MULT, Token::MULT) => true,
+            (Token::LPAREN, Token::LPAREN) => true,
+            (Token::RPAREN, Token::RPAREN) => true,
+            (Token::LBRACE, Token::LBRACE) => true,
+            (Token::RBRACE, Token::RBRACE) => true,
+            (Token::EQUAL, Token::EQUAL) => true,
+            (Token::EQUAL_EQUAL, Token::EQUAL_EQUAL) => true,
+            (Token::BANG_EQUAL, Token::BANG_EQUAL) => true,
+            (Token::BANG, Token::BANG) => true,
+            (Token::MINUS, Token::MINUS) => true,
+            (Token::LITERAL(a), Token::LITERAL(b)) => a.type_equal(&b),
+            (Token::IDENTIFIER(_), Token::IDENTIFIER(_)) => true,
+            (Token::SEMICOLON, Token::SEMICOLON) => true,
+            (Token::COMMA, Token::COMMA) => true,
+            (Token::DOT, Token::DOT) => true,
+            (Token::SLASH, Token::SLASH) => true,
+            (Token::GREATER, Token::GREATER) => true,
+            (Token::GREATER_EQUAL, Token::GREATER_EQUAL) => true,
+            (Token::LESS, Token::LESS) => true,
+            (Token::LESS_EQUAL, Token::LESS_EQUAL) => true,
+            (Token::AND, Token::AND) => true,
+            (Token::ELSE, Token::ELSE) => true,
+            (Token::FOR, Token::FOR) => true,
+            (Token::FUN, Token::FUN) => true,
+            (Token::CLASS, Token::CLASS) => true,
+            (Token::IF, Token::IF) => true,
+            (Token::OR, Token::OR) => true,
+            (Token::PRINT, Token::PRINT) => true,
+            (Token::RETURN, Token::RETURN) => true,
+            (Token::SUPER, Token::SUPER) => true,
+            (Token::THIS, Token::THIS) => true,
+            (Token::VAR, Token::VAR) => true,
+            (Token::WHILE, Token::WHILE) => true,
+            (Token::EOF, Token::EOF) => true,
+            _ => false,
         }
     }
 }
@@ -213,13 +263,10 @@ impl Scanner {
     fn identifier(&mut self) -> Result<(), String> {
         while self.peek().is_alphanumeric() { self.advance(); }
         let ident = self.src.chars().skip(self.start).take(self.current - self.start).collect::<String>();
-        let keyword = match KEYWORDS.get(&ident) {
-            None => {
-                return Err(format!("Expected a reserved word, found: {}", ident));
-            }
-            Some(k) => k,
+        match KEYWORDS.get(&ident) {
+            Some(k) => self.add_token(k.clone()),
+            None => self.add_token(IDENTIFIER(ident)),
         };
-        self.add_token(keyword.clone());
         Ok(())
     }
     fn peek(&mut self) -> char {
@@ -369,8 +416,20 @@ fn test_numbers() {
 }
 
 #[test]
-fn test_identifiers() {
+fn test_misc() {
     type TT = Token;
     assert_eq!(vec![TT::AND, TT::OR, TT::LITERAL(Literal::BOOL(true)), TT::LITERAL(Literal::BOOL(false))], test_scanner(String::from("and or true\n false")));
     assert_eq!(vec![TT::LITERAL(Literal::NIL), TT::PRINT, TT::RETURN, TT::WHILE], test_scanner(String::from("nil print return while")));
+}
+
+#[test]
+fn test_identifier_and_assign() {
+    type TT = Token;
+
+    assert_eq!(vec![TT::VAR, TT::IDENTIFIER("Hello".to_string()), TT::SEMICOLON],
+               test_scanner(format!("var Hello;")));
+
+    let hello = TT::IDENTIFIER("Hello".to_string());
+    assert_eq!(vec![TT::VAR, TT::IDENTIFIER("Hello".to_string()), TT::SEMICOLON, hello.clone(), TT::EQUAL, hello.clone(), TT::PLUS, TT::LITERAL(Literal::NUMBER(1.0)), TT::SEMICOLON],
+               test_scanner(format!("var Hello;\nHello = Hello + 1;")));
 }
