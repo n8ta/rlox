@@ -70,9 +70,7 @@ impl Lox {
         };
         let ast = match parse(tokens, &src) {
             Ok(ast) => {
-                for item in ast.iter() {
-                    println!("{:?}", item)
-                }
+                for item in ast.iter() {}
                 ast
             }
             Err(err) => {

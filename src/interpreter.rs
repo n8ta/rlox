@@ -64,12 +64,13 @@ impl Interpreter {
                         // todo: fix source ref
                         None => {
                             let mut env = self.env.borrow_mut();
-                            env.assign(&name, &NIL, &SourceRef::new(0, 0, 0))
+                            env.declare(&name, &NIL);
                         }
                         Some(lit) => {
                             let mut env = self.env.clone();
                             let mut envmut = env.borrow_mut();
-                            envmut.assign(&name, &self.execute_expr(lit)?, &SourceRef::new(0, 0, 0))
+                            let value = &self.execute_expr(lit)?;
+                            envmut.declare(&name, value);
                         },
                     };
                     NIL
@@ -78,31 +79,6 @@ impl Interpreter {
         }
         Ok(last)
     }
-
-    // fn execute_decl(&mut self, decl: Decl) -> Result<Literal, RuntimeException> {
-    //     match decl {
-    //         Decl::VarDecl(ident, value) => {
-    //             if let Some(expr) = value {
-    //                 let exp = self.execute_expr(expr)?;
-    //                 self.env.declare(&ident, &exp);
-    //             } else {
-    //                 self.env.declare(&ident, &Literal::NIL);
-    //             }
-    //             Ok(Literal::NIL)
-    //
-    //         },
-    //         Decl::Stmt(stmt) => {
-    //             match stmt {
-    //                 Stmt::Expr(expr) => self.execute_expr(expr),
-    //                 Stmt::Print(expr) => {
-    //                     let res = self.execute_expr(expr)?;
-    //                     println!("{}", res);
-    //                     Ok(res)
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
 
     fn execute_expr(&mut self, expr: ExprTy) -> Result<Literal, RuntimeException> {
         match expr.expr {

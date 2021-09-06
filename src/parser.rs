@@ -10,6 +10,12 @@ pub fn parse<'a>(tokens: Tokens, source: &'a str) -> Result<Vec<Stmt>, String> {
     parser.parse()
 }
 
+/// Used in tests
+fn parse_expr<'a>(tokens: Tokens, source: &'a str) -> ExprTy {
+    let mut parser = Parser::new(tokens, source);
+    parser.expression().unwrap()
+}
+
 struct Parser<'a> {
     tokens: Tokens,
     current: usize,
@@ -18,7 +24,7 @@ struct Parser<'a> {
 
 pub type ExprTy = Box<ExprInContext>;
 
-#[derive(Clone, Debug, PartialOrd, PartialEq)]
+#[derive(Clone, Debug, PartialOrd)]
 pub struct ExprInContext {
     pub context: SourceRef,
     pub expr: Expr,
@@ -31,6 +37,12 @@ fn mk_expr(expr: Expr, context: SourceRef) -> ExprTy {
 impl ExprInContext {
     fn new(expr: Expr, context: SourceRef) -> ExprInContext {
         ExprInContext { expr, context }
+    }
+}
+
+impl PartialEq for ExprInContext {
+    fn eq(&self, other: &Self) -> bool {
+        self.expr == other.expr
     }
 }
 
@@ -215,7 +227,7 @@ impl<'a> Parser<'a> {
             let exp = self.expression()?;
             init = Some(mk_expr(exp.expr, exp.context));
         }
-        self.consume(SEMICOLON, "Expected ';' after variable declaration");
+        self.consume(SEMICOLON, "Expected ';' after variable declaration")?;
         if let Token::IDENTIFIER(str) = name.token {
             return Ok(Stmt::Variable(str.clone(), init));
         }
@@ -260,7 +272,7 @@ impl<'a> Parser<'a> {
         while !self.check(Token::RBRACE) && !self.is_at_end() {
             stmts.push(self.declaration()?)
         }
-        self.consume(Token::RBRACE, "Expected block to end with an '}'.");
+        self.consume(Token::RBRACE, "Expected block to end with an '}'.")?;
         Ok(Stmt::Block(stmts))
     }
 
@@ -384,11 +396,7 @@ impl<'a> Parser<'a> {
 fn help(str: &str) -> ExprTy {
     let mut tokens = scanner(str.to_string()).unwrap();
     tokens.pop();
-    let res = parse(tokens, "").unwrap();
-    match &res[0] {
-        Stmt::Expr(expr) => expr.clone(),
-        _ => panic!("cannot handle non-expr"),
-    }
+    parse_expr(tokens, "")
 }
 
 
@@ -509,7 +517,7 @@ fn test_assign() {
     let expr = ExprInContext::new(Expr::Assign(format!("varname"),
                                                Box::new(
                                                    ExprInContext::new(
-                                                       Expr::Literal(scanner::Literal::NUMBER((1.0))),
+                                                       Expr::Literal(scanner::Literal::NUMBER(1.0)),
                                                        SourceRef::new(10, 3, 0)))),
                                   SourceRef::new(0, 13, 0));
 

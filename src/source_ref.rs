@@ -41,7 +41,7 @@ fn merging() {
 fn source() {
     let src = "this is my source";
     let a = SourceRef::new(0, 4, 0 );
-    let b = SourceRef::new(0, 5, 2);
+    let b = SourceRef::new(5, 2, 0);
     let c = SourceRef::new(0, src.chars().count(), 0);
 
     assert_eq!(a.source(src), "this");
