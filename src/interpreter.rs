@@ -157,14 +157,13 @@ impl Interpreter {
                 Ok(Literal::NIL)
             }
             Expr::Logical(left, op, right) => {
-                match op {
-                    LogicalOp::AND => {
-                        Ok(Literal::BOOL(self.execute_expr(left)?.truthy() && self.execute_expr(right)?.truthy()))
-                    }
-                    LogicalOp::OR => {
-                        Ok(Literal::BOOL(self.execute_expr(left)?.truthy() || self.execute_expr(right)?.truthy()))
-                    }
-                }
+                let left = self.execute_expr(left)?;
+                let res = if let LogicalOp::OR = op {
+                    if left.truthy() { left } else { self.execute_expr(right)? }
+                } else {
+                    if !left.truthy() { left } else { self.execute_expr(right)? }
+                };
+                Ok(res)
             }
         }
     }
