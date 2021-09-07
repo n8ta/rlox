@@ -1,9 +1,9 @@
-use crate::parser::{ExprTy, Expr, UnaryOp, Stmt};
+use crate::parser::{ExprTy, Expr, UnaryOp, Stmt, LogicalOp};
 use crate::scanner::{Literal};
 use crate::parser::BinOp::{EQUAL_EQUAL, BANG_EQUAL, PLUS, SLASH, MINUS, MULT, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, AND, OR};
 use crate::source_ref::SourceRef;
 use crate::environment::Env;
-use crate::scanner::Literal::NIL;
+use crate::scanner::Literal::{NIL, BOOL};
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -155,6 +155,16 @@ impl Interpreter {
                 let value = self.execute_expr(new_val)?;
                 self.env.borrow_mut().assign(&var, &value, &expr.context)?;
                 Ok(Literal::NIL)
+            }
+            Expr::Logical(left, op, right) => {
+                match op {
+                    LogicalOp::AND => {
+                        Ok(Literal::BOOL(self.execute_expr(left)?.truthy() && self.execute_expr(right)?.truthy()))
+                    }
+                    LogicalOp::OR => {
+                        Ok(Literal::BOOL(self.execute_expr(left)?.truthy() || self.execute_expr(right)?.truthy()))
+                    }
+                }
             }
         }
     }

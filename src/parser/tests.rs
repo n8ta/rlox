@@ -1,5 +1,5 @@
 use crate::source_ref::SourceRef;
-use crate::scanner::Literal;
+use crate::scanner::{Literal};
 use crate::parser::{ExprInContext, Expr, parse, ExprTy, Parser, UnaryOp, BinOp, Stmt, Tokens};
 use std::rc::Rc;
 use crate::scanner;

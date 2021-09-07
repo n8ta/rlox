@@ -1,0 +1,3 @@
+print true or (1 + "str");
+print false and (1 + "str");
+print true or (true or true);

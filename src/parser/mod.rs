@@ -5,6 +5,7 @@ use crate::scanner;
 use crate::scanner::Token::{MINUS, AND, OR, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, SLASH, MULT, LITERAL, LPAREN, RPAREN, BANG_EQUAL, EQUAL_EQUAL, VAR, SEMICOLON};
 use crate::source_ref::SourceRef;
 use std::rc::Rc;
+use crate::parser::Expr::Logical;
 
 
 pub type Tokens = Vec<TokenInContext>;
@@ -52,7 +53,13 @@ pub enum Stmt {
     Block(Vec<Stmt>),
     Print(ExprTy),
     Variable(String, Option<ExprTy>),
-    If(ExprTy, Box<Stmt>, Option<Box<Stmt>>)
+    If(ExprTy, Box<Stmt>, Option<Box<Stmt>>),
+}
+
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
+pub enum LogicalOp {
+    AND,
+    OR,
 }
 
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
@@ -63,6 +70,7 @@ pub enum Expr {
     Unary(UnaryOp, ExprTy),
     Variable(String),
     Assign(String, ExprTy),
+    Logical(ExprTy, LogicalOp, ExprTy),
 }
 
 #[allow(non_camel_case_types)]
@@ -89,6 +97,15 @@ pub enum UnaryOp {
     BANG,
 }
 
+impl LogicalOp {
+    fn new(tk: Token) -> LogicalOp {
+        match tk {
+            AND => LogicalOp::AND,
+            OR => LogicalOp::OR,
+            _ => panic!("{:?} is not a valid logical op", tk)
+        }
+    }
+}
 
 impl BinOp {
     fn new(tk: Token) -> BinOp {
@@ -235,8 +252,30 @@ impl Parser {
         Err(format!("FAILED didnt find a IDENT where expected"))
     }
 
+    fn or(&mut self) -> ExprResult {
+        let mut expr = self.and()?;
+        while (self.matches(vec![Token::OR])) {
+            let op = LogicalOp::new(self.previous().unwrap().token);
+            let right = self.and()?;
+            let cont = expr.context.merge(&right.context);
+            expr = Box::new(ExprInContext::new(Expr::Logical(expr, op, right), cont));
+        }
+        Ok(expr)
+    }
+
+    fn and(&mut self) -> ExprResult {
+        let mut expr = self.equality()?;
+        while self.matches(vec![Token::AND]) {
+            let op = LogicalOp::new(self.previous().unwrap().token);
+            let right = self.equality()?;
+            let context = expr.context.merge(&right.context);
+            expr = Box::new(ExprInContext::new(Expr::Logical(expr, op, right), context));
+        }
+        Ok(expr)
+    }
+
     fn assignment(&mut self) -> ExprResult {
-        let expr = self.equality()?;
+        let expr = self.or()?;
 
         if self.matches(vec![Token::EQUAL]) {
             let _eq = self.previous().unwrap();
