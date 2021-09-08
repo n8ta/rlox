@@ -54,6 +54,7 @@ pub enum Stmt {
     Print(ExprTy),
     Variable(String, Option<ExprTy>),
     If(ExprTy, Box<Stmt>, Option<Box<Stmt>>),
+    While(ExprTy, Box<Stmt>)
 }
 
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
@@ -300,13 +301,23 @@ impl Parser {
     fn statement(&mut self) -> Result<Stmt, String> {
         if self.matches(vec![Token::PRINT]) {
             self.print_statement()
-        } else if self.matches(vec![Token::LBRACE]) {
+        } else if self.matches(vec![Token::WHILE]) {
+            self.while_statement()
+        }else if self.matches(vec![Token::LBRACE]) {
             self.block()
         } else if self.matches(vec![Token::IF]) {
             self.if_statement()
         } else {
             self.expression_statement()
         }
+    }
+
+    fn while_statement(&mut self) -> Result<Stmt, String> {
+        self.consume(Token::LPAREN, "Expected '(' after 'while'")?;
+        let expr = self.expression()?;
+        self.consume(Token::RPAREN, "Expected ')' after while condition")?;
+        let body = self.statement()?;
+        Ok(Stmt::While(expr, Box::new(body)))
     }
 
     fn if_statement(&mut self) -> Result<Stmt, String> {

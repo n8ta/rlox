@@ -29,13 +29,13 @@ fn is_num(lit: Literal, context: &SourceRef) -> Result<f64, RuntimeException> {
     }
 }
 
-fn is_equal(left: &Literal, right: &Literal, context: SourceRef) -> Result<bool, RuntimeException> {
+fn is_equal(left: &Literal, right: &Literal, context: &SourceRef) -> Result<bool, RuntimeException> {
     match (left, right) {
         (Literal::STRING(left), Literal::STRING(right)) => Ok(left == right),
         (Literal::NUMBER(left), Literal::NUMBER(right)) => Ok(left == right),
         (Literal::BOOL(left), Literal::BOOL(right)) => Ok(left == right),
         (Literal::NIL, Literal::NIL) => Ok(true),
-        _ => Err(RuntimeException::new(format!("Cannot compare {} and {}", left.tname(), right.tname()), context))
+        _ => Err(RuntimeException::new(format!("Cannot compare {} and {}", left.tname(), right.tname()), context.clone()))
     }
 }
 
@@ -59,9 +59,9 @@ impl Interpreter {
                     self.env = parent;
                     res?
                 }
-                Stmt::Expr(expr) => self.execute_expr(expr)?,
+                Stmt::Expr(expr) => self.execute_expr(&expr)?,
                 Stmt::Print(val) => {
-                    println!("{}", self.execute_expr(val)?);
+                    println!("{}", self.execute_expr(&val)?);
                     NIL
                 }
                 Stmt::Variable(name, value) => {
@@ -72,14 +72,14 @@ impl Interpreter {
                             env.declare(&name, &NIL);
                         }
                         Some(lit) => {
-                            let value = &self.execute_expr(lit)?;
+                            let value = &self.execute_expr(&lit)?;
                             self.env.clone().borrow_mut().declare(&name, value);
                         }
                     };
                     NIL
                 }
                 Stmt::If(test, then_branch, else_branch) => {
-                    let res = self.execute_expr(test)?;
+                    let res = self.execute_expr(&test)?;
                     if res.truthy() {
                         self.interpret(vec![*then_branch])?
                     } else if let Some(else_branch) = else_branch {
@@ -88,22 +88,29 @@ impl Interpreter {
                         NIL
                     }
                 }
+                Stmt::While(test, body) => {
+                    while self.execute_expr(&test)?.truthy() {
+                        let b = *body.clone();
+                        self.interpret(vec![b])?;
+                    }
+                    NIL
+                }
             }
         }
         Ok(last)
     }
 
-    fn execute_expr(&mut self, expr: ExprTy) -> Result<Literal, RuntimeException> {
-        match expr.expr {
+    fn execute_expr(&mut self, expr: &ExprTy) -> Result<Literal, RuntimeException> {
+        match &expr.expr {
             Expr::Binary(left, op, right) => {
                 let context = left.context.merge(&right.context);
 
-                let left = self.execute_expr(left)?;
-                let right = self.execute_expr(right)?;
+                let left = self.execute_expr(&left)?;
+                let right = self.execute_expr(&right)?;
                 Ok(match op {
                     // NUM, STRING, BOOL, NIL
-                    EQUAL_EQUAL => Literal::BOOL(is_equal(&left, &right, expr.context)?),
-                    BANG_EQUAL => Literal::BOOL(!is_equal(&left, &right, expr.context)?),
+                    EQUAL_EQUAL => Literal::BOOL(is_equal(&left, &right, &expr.context)?),
+                    BANG_EQUAL => Literal::BOOL(!is_equal(&left, &right, &expr.context)?),
 
                     // NUM
                     LESS => Literal::BOOL(is_num(left, &context)? < is_num(right, &context)?),
@@ -119,7 +126,7 @@ impl Interpreter {
                         match (&left, &right) {
                             (Literal::STRING(linner), Literal::STRING(rinner)) => Literal::STRING(format!("{}{}", linner, rinner)),
                             (Literal::NUMBER(linner), Literal::NUMBER(rinner)) => Literal::NUMBER(linner + rinner),
-                            _ => return Err(RuntimeException::new(format!("Cannot + {} and {}", left.tname(), right.tname()), expr.context)),
+                            _ => return Err(RuntimeException::new(format!("Cannot + {} and {}", left.tname(), right.tname()), expr.context.clone())),
                         }
                     }
 
@@ -128,22 +135,22 @@ impl Interpreter {
                     OR => Literal::BOOL(left.truthy() || right.truthy()),
                 })
             }
-            Expr::Grouping(inner) => self.execute_expr(inner),
-            Expr::Literal(lit) => Ok(lit),
+            Expr::Grouping(inner) => self.execute_expr(&inner),
+            Expr::Literal(lit) => Ok(lit.clone()),
             Expr::Unary(op, inner) => {
                 match op {
                     UnaryOp::BANG => {
                         if let Expr::Literal(Literal::BOOL(bool_l)) = inner.expr {
                             Ok(Literal::BOOL(!bool_l))
                         } else {
-                            Err(RuntimeException::new(format!("Cannot apply ! to a non-bool {:?}", inner), expr.context))
+                            Err(RuntimeException::new(format!("Cannot apply ! to a non-bool {:?}", inner), expr.context.clone()))
                         }
                     }
                     UnaryOp::MINUS => {
                         if let Expr::Literal(Literal::NUMBER(num)) = inner.expr {
                             Ok(Literal::NUMBER(-num))
                         } else {
-                            Err(RuntimeException::new(format!("Cannot apply - to a non-number {:?}", inner), expr.context))
+                            Err(RuntimeException::new(format!("Cannot apply - to a non-number {:?}", inner), expr.context.clone()))
                         }
                     }
                 }
@@ -152,16 +159,16 @@ impl Interpreter {
                 self.env.borrow_mut().fetch(&var, &expr.context)
             }
             Expr::Assign(var, new_val) => {
-                let value = self.execute_expr(new_val)?;
+                let value = self.execute_expr(&new_val)?;
                 self.env.borrow_mut().assign(&var, &value, &expr.context)?;
                 Ok(Literal::NIL)
             }
             Expr::Logical(left, op, right) => {
-                let left = self.execute_expr(left)?;
+                let left = self.execute_expr(&left)?;
                 let res = if let LogicalOp::OR = op {
-                    if left.truthy() { left } else { self.execute_expr(right)? }
+                    if left.truthy() { left } else { self.execute_expr(&right)? }
                 } else {
-                    if !left.truthy() { left } else { self.execute_expr(right)? }
+                    if !left.truthy() { left } else { self.execute_expr(&right)? }
                 };
                 Ok(res)
             }
