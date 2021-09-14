@@ -1,5 +1,7 @@
 use std::cmp::{min, max};
 use std::rc::Rc;
+use std::fmt::{Display, Formatter, Pointer};
+use colored::*;
 
 #[derive(Clone, PartialOrd, PartialEq, Ord, Eq, Debug)]
 pub struct SourceRef {
@@ -21,6 +23,15 @@ impl SourceRef {
     }
     pub fn source(&self) -> String {
         self.src.chars().skip(self.offset).take(self.len).collect()
+    }
+}
+
+impl Display for SourceRef {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut source = self.src.chars().skip(self.offset).take(self.len).collect::<String>().red().to_string();
+        let before = self.src.chars().skip(self.offset-10).take(10).collect::<String>().white().to_string();
+        let after = self.src.chars().skip(self.offset+self.len).take(10).collect::<String>().white().to_string();
+        write!(f, "{}{}{}", before, source, after)
     }
 }
 

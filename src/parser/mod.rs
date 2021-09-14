@@ -6,6 +6,7 @@ use crate::scanner::Token::{MINUS, AND, OR, GREATER, GREATER_EQUAL, LESS, LESS_E
 use crate::source_ref::SourceRef;
 use std::rc::Rc;
 use crate::parser::Expr::Logical;
+use colored::*;
 
 
 pub type Tokens = Vec<TokenInContext>;
@@ -54,7 +55,7 @@ pub enum Stmt {
     Print(ExprTy),
     Variable(String, Option<ExprTy>),
     If(ExprTy, Box<Stmt>, Option<Box<Stmt>>),
-    While(ExprTy, Box<Stmt>)
+    While(ExprTy, Box<Stmt>),
 }
 
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
@@ -163,7 +164,12 @@ impl Parser {
 
     fn consume(&mut self, typ: Token, message: &str) -> Result<TokenInContext, String> {
         if self.check(typ.clone()) { return Ok(self.advance()); }
-        Err(format!("{} - didn't find a {:?} as expected. Found a {:?} {:?}", message, typ, self.peek().token, self.peek().context))
+        Err(format!("{} - didn't find a {:?} as expected. Found a {:?} \n {} {}",
+                    message,
+                    typ,
+                    self.peek().token,
+                    (&String::from("➜\t")[..]).white(),
+                    self.peek().context))
     }
 
     fn synchronize(&mut self) {
@@ -303,10 +309,12 @@ impl Parser {
             self.print_statement()
         } else if self.matches(vec![Token::WHILE]) {
             self.while_statement()
-        }else if self.matches(vec![Token::LBRACE]) {
+        } else if self.matches(vec![Token::LBRACE]) {
             self.block()
         } else if self.matches(vec![Token::IF]) {
             self.if_statement()
+        } else if self.matches(vec![Token::FOR]) {
+            self.for_statement()
         } else {
             self.expression_statement()
         }
@@ -330,6 +338,41 @@ impl Parser {
             else_branch = Some(Box::new(self.statement()?));
         }
         Ok(Stmt::If(test, Box::new(if_branch), else_branch))
+    }
+
+    fn for_statement(&mut self) -> Result<Stmt, String> {
+        self.consume(Token::LPAREN, "Expected a '(' after a for loop")?;
+        let init: Option<Stmt> = if self.matches(vec![Token::SEMICOLON]) {
+            None
+        } else if self.matches(vec![Token::VAR]) {
+            Some(self.variable_declaration()?)
+        } else {
+            Some(self.expression_statement()?)
+        };
+        let mut condition: Option<ExprTy> = None;
+        if !self.check(Token::SEMICOLON) {
+            condition = Some(self.expression()?);
+        }
+        self.consume(Token::SEMICOLON, "Expect ';' after for loop condition.")?;
+        let mut increment: Option<ExprTy> = None;
+        if !self.check(Token::RPAREN) {
+            increment = Some(self.expression()?);
+        }
+        self.consume(Token::RPAREN, "Expected ')' after for loop")?;
+        let mut body = self.statement()?;
+        if let Some(increment) = increment {
+            body = Stmt::Block(vec![body, Stmt::Expr(increment)], );
+        }
+        let src = self.tokens[self.current].context.clone();
+        if condition.is_none() {
+            condition = Some(Box::new(ExprInContext::new(Expr::Literal(Literal::BOOL(true)), src)));
+        }
+        body = Stmt::While(condition.unwrap(), Box::new(body));
+        if let Some(init) = init {
+            body = Stmt::Block(vec![init, body])
+        }
+        Ok(body)
+
     }
 
     fn block(&mut self) -> Result<Stmt, String> {
@@ -453,7 +496,7 @@ impl Parser {
         // if self.matches(vec![Token::IDENTIFIER]) {
         //     return Ok(mk_expr(Expr::Variable(self.previous().unwrap().), self.previous().unwrap().context));
         // }
-        Err(format!("Failed to match any expression for {}", self.tokens[self.current].context.source()))
+        Err(format!("Failed to match any expression for {}", self.tokens[self.current].context))
     }
 }
 

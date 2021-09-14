@@ -17,12 +17,14 @@ fn end_to_end_tests() {
         }
         let number = name_str.split("test").nth(1).unwrap().split(".lox").nth(0).unwrap();
 
+        let test_path = tests_root.join(name_str);
         let res = Command::new(lox_exe.clone())
-            .args(&[tests_root.join(name_str)])
+            .args(&[test_path.clone()])
             .output()
             .unwrap();
 
-        let expected = read_to_string(tests_root.join(format!("out{}.txt", number.clone())))
+        let out_path = tests_root.join(format!("out{}.txt", number.clone()));
+        let expected = read_to_string(out_path.clone())
             .expect(&format!("Expected a file called out{}.txt to exist", number.clone()));
 
         let mut stdout = String::from_utf8(res.stdout).unwrap();
@@ -35,6 +37,9 @@ fn end_to_end_tests() {
         println!("Expected: {}", expected);
         if stderr.len() != 0 {
             eprintln!("Stderr: {}", stderr);
+        }
+        if expected != stdout {
+            eprintln!("{}\n{}", test_path.to_str().unwrap(), out_path.to_str().unwrap())
         }
         assert_eq!(expected, stdout);
     }
