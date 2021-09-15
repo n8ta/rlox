@@ -88,7 +88,7 @@ impl Lox {
         match interpret(ast, self.env.clone()) {
             Ok(_) => {}
             Err(err) =>
-                eprintln!("[{}] Error: {}\n           \"{}\"", err.context.line, &err.msg, err.context)
+                eprintln!("[line:{}] Error: {}\n{}", err.context.line+1, &err.msg, err.context)
         }
     }
 

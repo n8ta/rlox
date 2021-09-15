@@ -22,9 +22,7 @@ impl Source {
         let mut seen_line = false;
         let chars: Vec<char> = self.src.chars().collect::<Vec<char>>();
         for (i, chr) in chars.iter().rev().skip(chars.len()-offset).enumerate() {
-            println!("{} {}",i , chr);
             if *chr == '\n' && seen_line {
-                println!("{} {}", offset, i);
                 return offset-i
             } else if *chr == '\n' {
                 seen_line = true;
@@ -89,9 +87,25 @@ impl SourceRef {
 impl Display for SourceRef {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let source = self.src.src.chars().skip(self.offset).take(self.len).collect::<String>().red().to_string();
-        let before = self.src.prior_line(self.offset);
-        let after = self.src.next_line(self.offset);
-        write!(f, "{}{}{}", before, source, after)
+        let before = self.src.prior_line(self.offset);;
+        let after = self.src.next_line(self.offset+self.len);
+
+        let combined = format!("{}{}{}", before, source, after);
+        let raw_output = combined.split("\n").collect::<Vec<&str>>();
+        let mut with_line_nums = vec![];
+        let mut idx = if before.contains('\n') {
+            self.line - 1
+        } else {
+            self.line
+        };
+        for line in raw_output.into_iter() {
+            let line_number = format!("\t[{}]\t", idx+1).white();
+            with_line_nums.push(
+                format!("{} {}", line_number, line)
+            );
+            idx += 1;
+        }
+        write!(f, "{}", with_line_nums.join("\n"))
     }
 }
 
