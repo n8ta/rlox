@@ -19,15 +19,21 @@ use crate::interpreter::{interpret};
 use crate::environment::Env;
 use std::rc::Rc;
 use std::cell::RefCell;
+use crate::source_ref::Source;
 
 struct Lox {
     had_error: bool,
     env: Rc<RefCell<Env>>,
+    src: Rc<Source>,
 }
 
 impl Lox {
     fn new() -> Lox {
-        return Lox { had_error: false, env: Rc::new(RefCell::new(Env::new(None))) };
+        return Lox {
+            src: Rc::new(Source::new(String::new())),
+            had_error: false,
+            env: Rc::new(RefCell::new(Env::new(None))),
+        };
     }
     fn main(&mut self, args: Vec<String>) {
         if args.len() > 2 {
@@ -42,8 +48,8 @@ impl Lox {
 
     fn run_file(&mut self, filename: &str) {
         if let Ok(contents) = read_to_string(filename) {
-            let file = Rc::new(contents);
-            self.run(file);
+            self.src = Rc::new(Source::new(contents));
+            self.run(self.src.clone());
             if self.had_error {
                 exit(-1);
             }
@@ -58,12 +64,12 @@ impl Lox {
         loop {
             let mut line_contents = String::new();
             reader.read_line(&mut line_contents).unwrap();
-            let line = Rc::new(line_contents);
+            let line = Rc::new(Source::new(line_contents));
             self.run(line);
         }
     }
 
-    pub fn run(&mut self, src: Rc<String>) {
+    pub fn run(&mut self, src: Rc<Source>) {
         let tokens = match scanner(src.clone()) {
             Ok(t) => t,
             Err((message, line)) => {
@@ -71,7 +77,7 @@ impl Lox {
                 return;
             }
         };
-        let ast = match parse(tokens, src.clone()) {
+        let ast = match parse(tokens, Rc::new(src.src.clone())) {
             Ok(ast) => ast,
             Err(err) => {
                 eprintln!("{}", err);
@@ -80,8 +86,9 @@ impl Lox {
         };
 
         match interpret(ast, self.env.clone()) {
-            Ok(_) => {},
-            Err(err) => eprintln!("[{}] Error: {}\n           \"{}\"", err.context.line, &err.msg, err.context.source())
+            Ok(_) => {}
+            Err(err) =>
+                eprintln!("[{}] Error: {}\n           \"{}\"", err.context.line, &err.msg, err.context)
         }
     }
 

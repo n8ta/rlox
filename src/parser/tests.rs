@@ -1,4 +1,4 @@
-use crate::source_ref::SourceRef;
+use crate::source_ref::{SourceRef, Source};
 use crate::scanner::{Literal};
 use crate::parser::{ExprInContext, Expr, parse, ExprTy, Parser, UnaryOp, BinOp, Stmt, Tokens};
 use std::rc::Rc;
@@ -12,14 +12,14 @@ fn parse_expr(tokens: Tokens, source: Rc<String>) -> ExprTy {
 
 /// Turn a string into an expression to write simple tests
 fn help(str: &str) -> ExprTy {
-    let mut tokens = scanner(Rc::new(str.to_string())).unwrap();
+    let mut tokens = scanner(Rc::new(Source::new(str.to_string()))).unwrap();
     tokens.pop();
     parse_expr(tokens, Rc::new(String::from("")))
 }
 
 
 fn mk_expr_test(expr: Expr) -> ExprTy {
-    Box::new(ExprInContext::new(expr, SourceRef::new(0, 0, 0, Rc::new("".to_string()))))
+    Box::new(ExprInContext::new(expr, SourceRef::new(0, 0, 0, Rc::new(Source::new("".to_string())))))
 }
 
 
@@ -122,17 +122,17 @@ fn test_primaries() {
 
 #[test]
 fn test_decl() {
-    let src = Rc::new(String::from("var varname = 1.0;"));
+    let src = Rc::new(Source::new(String::from("var varname = 1.0;")));
     let ast = Stmt::Variable(format!("varname"), Option::from(ExprTy::new(ExprInContext::new(
         Expr::Literal(Literal::NUMBER(1.0)),
         SourceRef::new(0, 0, 0, src.clone())))));
     let tokens = scanner(src.clone()).unwrap();
-    assert_eq!(parse(tokens, src.clone()).unwrap(), vec![ast]);
+    assert_eq!(parse(tokens, Rc::new(src.src.clone())).unwrap(), vec![ast]);
 }
 
 #[test]
 fn test_assign() {
-    let src = Rc::new("varname = 1.0;".to_string());
+    let src = Rc::new(Source::new("varname = 1.0;".to_string()));
 
     let context = SourceRef::new(10, 3, 0, src.clone());
     let context2 = SourceRef::new(0, 13, 0, src.clone());
@@ -147,5 +147,5 @@ fn test_assign() {
     let ast = vec![Stmt::Expr(Box::new(expr))];
 
     let tokens = scanner(src.clone()).unwrap();
-    assert_eq!(parse(tokens, src.clone()).unwrap()[0], ast[0]);
+    assert_eq!(parse(tokens, Rc::new(src.src.clone())).unwrap()[0], ast[0]);
 }

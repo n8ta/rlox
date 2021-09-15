@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::source_ref::SourceRef;
+use crate::source_ref::{SourceRef, Source};
 use std::fmt::{Display, Formatter};
 use crate::scanner::Token::IDENTIFIER;
 use std::rc::Rc;
@@ -130,7 +130,7 @@ impl Display for TokenInContext {
 }
 
 impl TokenInContext {
-    pub fn new(token: Token, offset: usize, len: usize, line: usize, src: Rc<String>) -> TokenInContext {
+    pub fn new(token: Token, offset: usize, len: usize, line: usize, src: Rc<Source>) -> TokenInContext {
         TokenInContext { token, context: SourceRef::new(offset, len, line, src) }
     }
 }
@@ -193,13 +193,14 @@ impl PartialEq for TokenInContext {
     }
 }
 
-pub fn scanner(src: Rc<String>) -> ScannerResult {
+pub fn scanner(src: Rc<Source>) -> ScannerResult {
     let mut scanner = Scanner::new(src);
     scanner.scan_tokens()
 }
 
 struct Scanner {
-    src: Rc<String>,
+    source: Rc<Source>,
+    src: String,
     start: usize,
     current: usize,
     line: usize,
@@ -207,7 +208,7 @@ struct Scanner {
 }
 
 impl Scanner {
-    fn new(src: Rc<String>) -> Scanner { Scanner { src, start: 0, current: 0, line: 0, tokens: vec![] } }
+    fn new(src: Rc<Source>) -> Scanner { Scanner { source: src.clone(), src: src.src.clone(), start: 0, current: 0, line: 0, tokens: vec![] } }
     fn is_at_end(&self) -> bool {
         self.current >= self.src.chars().count()
     }
@@ -223,7 +224,7 @@ impl Scanner {
                 self.start,
                 self.current - self.start,
                 self.line,
-            self.src.clone(),
+            self.source.clone(),
             )
         );
     }
@@ -368,7 +369,7 @@ impl Scanner {
             self.current,
             self.current - self.start,
             self.line,
-            self.src.clone(),
+            self.source.clone(),
         ));
         Ok(self.tokens.clone())
     }
@@ -376,7 +377,7 @@ impl Scanner {
 
 // Unwraps scanner result for easy tests
 fn test_scanner(src: String) -> Vec<TokenInContext> {
-    let mut scanner = Scanner::new(Rc::new(src));
+    let mut scanner = Scanner::new(Rc::new(Source::new(src)));
     let mut tokens = scanner.scan_tokens().unwrap();
     tokens.pop(); // remove EOF
     tokens

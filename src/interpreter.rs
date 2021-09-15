@@ -66,7 +66,7 @@ impl Interpreter {
                 }
                 Stmt::Variable(name, value) => {
                     match value {
-                        // todo: fix source ref
+                        // TODO: fix source ref
                         None => {
                             let mut env = self.env.borrow_mut();
                             env.declare(&name, &NIL);

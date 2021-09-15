@@ -164,12 +164,14 @@ impl Parser {
 
     fn consume(&mut self, typ: Token, message: &str) -> Result<TokenInContext, String> {
         if self.check(typ.clone()) { return Ok(self.advance()); }
-        Err(format!("{} - didn't find a {:?} as expected. Found a {:?} \n {} {}",
-                    message,
-                    typ,
-                    self.peek().token,
-                    (&String::from("➜\t")[..]).white(),
-                    self.peek().context))
+        Err(format!("{} - didn't find a {:?} as expected. Found a {:?}",
+                    message, typ, self.peek().token))
+        // Err(format!("{} - didn't find a {:?} as expected. Found a {:?} \n {} {}",
+        //             message,
+        //             typ,
+        //             self.peek().token,
+        //             (&String::from("➜\t")[..]).white(),
+        //             self.peek().context))
     }
 
     fn synchronize(&mut self) {

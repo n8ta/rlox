@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use crate::scanner::Literal;
 use crate::interpreter::RuntimeException;
-use crate::source_ref::SourceRef;
+use crate::source_ref::{SourceRef, Source};
 use std::rc::Rc;
 use std::cell::{RefCell};
 
@@ -26,10 +26,7 @@ impl Env {
         if let Some(parent) = self.enclosing.clone() {
             let parent = parent.clone();
             let mut env = parent.borrow_mut();
-            let parent_get = env.fetch(key, context);
-            if parent_get.is_ok() {
-                return parent_get;
-            }
+            return env.fetch(key, context)
         }
         return Err(RuntimeException::new(format!("Variable {} is undefined", key), context.clone()));
     }
@@ -55,7 +52,7 @@ impl Env {
 #[test]
 fn set_get() {
     let mut env = Env::new(None);
-    let src = SourceRef::new(0, 0, 0, Rc::new(String::from("testing")));
+    let src = SourceRef::new(0, 0, 0, Rc::new(Source::new(String::from("testing"))));
     for i in 0..100 {
         env.declare(&format!("val-{}", i), &Literal::NUMBER(i as f64));
     }
@@ -72,13 +69,13 @@ fn set_get() {
 #[should_panic]
 fn get_unset() {
     let mut env = Env::new(None);
-    let src = SourceRef::new(0, 0, 0, Rc::new(String::from("test")));
+    let src = SourceRef::new(0, 0, 0, Rc::new(Source::new(String::from("test"))));
     env.fetch("key", &src).unwrap();
 }
 
 #[test]
 fn pull_from_parent() {
-    let src = SourceRef::new(0, 0, 0, Rc::new(String::from("aksjdflaksjfklas")));
+    let src = SourceRef::new(0, 0, 0, Rc::new(Source::new(String::from("aksjdflaksjfklas"))));
     let lit = Literal::STRING(format!("Helllloooo!"));
     let parent = Rc::new(RefCell::new(Env::new(None)));
     let mut env = Env::new(Some(parent.clone()));
