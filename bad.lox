@@ -1,0 +1,5 @@
+var y = 1;
+var xx = 3;
+var g = xx + 5;
+print g;
+print "gasdf";
