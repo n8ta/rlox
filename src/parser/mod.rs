@@ -9,9 +9,19 @@ use crate::parser::Expr::Logical;
 use colored::*;
 
 
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
+pub struct ParserError {
+    pub msg: String,
+    pub context: SourceRef,
+}
+
+impl ParserError {
+    pub fn new(msg: String, context: SourceRef) -> ParserError { ParserError { msg, context } }
+}
+
 pub type Tokens = Vec<TokenInContext>;
 
-pub fn parse(tokens: Tokens, source: Rc<String>) -> Result<Vec<Stmt>, String> {
+pub fn parse(tokens: Tokens, source: Rc<String>) -> Result<Vec<Stmt>, ParserError> {
     let mut parser: Parser = Parser::new(tokens, source);
     parser.parse()
 }
@@ -139,14 +149,14 @@ impl UnaryOp {
     }
 }
 
-type ExprResult = Result<ExprTy, String>;
+type ExprResult = Result<ExprTy, ParserError>;
 
 impl Parser {
     fn new(tokens: Tokens, source: Rc<String>) -> Parser {
         Parser { tokens, current: 0, source }
     }
 
-    fn parse(&mut self) -> Result<Vec<Stmt>, String> {
+    fn parse(&mut self) -> Result<Vec<Stmt>, ParserError> {
         let mut stmts: Vec<Stmt> = vec![];
         while !self.is_at_end() {
             stmts.push(self.declaration()?)
@@ -162,16 +172,12 @@ impl Parser {
         }
     }
 
-    fn consume(&mut self, typ: Token, message: &str) -> Result<TokenInContext, String> {
+    fn consume(&mut self, typ: Token, message: &str) -> Result<TokenInContext, ParserError> {
         if self.check(typ.clone()) { return Ok(self.advance()); }
-        Err(format!("{} - didn't find a {:?} as expected. Found a {:?}",
-                    message, typ, self.peek().token))
-        // Err(format!("{} - didn't find a {:?} as expected. Found a {:?} \n {} {}",
-        //             message,
-        //             typ,
-        //             self.peek().token,
-        //             (&String::from("➜\t")[..]).white(),
-        //             self.peek().context))
+        Err(ParserError::new(
+            format!("{} - didn't find a {:?} as expected. Found a {:?}",
+                    message, typ, self.peek().token),
+            self.tokens[self.current].context.clone()))
     }
 
     fn synchronize(&mut self) {
@@ -189,7 +195,6 @@ impl Parser {
             self.advance();
         }
     }
-
 
     fn matches(&mut self, tokens: Vec<Token>) -> bool {
         let tkn = match self.tokens.get(self.current) {
@@ -227,13 +232,17 @@ impl Parser {
         self.previous().unwrap()
     }
 
-    fn declaration(&mut self) -> Result<Stmt, String> {
+    fn err(&self, msg: String) -> ParserError {
+        ParserError::new(msg, self.tokens[self.current].context.clone())
+    }
+
+    fn declaration(&mut self) -> Result<Stmt, ParserError> {
         if self.matches(vec![VAR]) {
             match self.variable_declaration() {
                 Ok(stmt) => Ok(stmt),
-                Err(msg) => {
+                Err(err) => {
                     self.synchronize();
-                    Err(msg)
+                    Err(err)
                 }
             }
         } else {
@@ -247,7 +256,7 @@ impl Parser {
         }
     }
 
-    fn variable_declaration(&mut self) -> Result<Stmt, String> {
+    fn variable_declaration(&mut self) -> Result<Stmt, ParserError> {
         let name = self.consume(Token::IDENTIFIER(format!("")), "Expect variable name.").unwrap();
         let mut init: Option<ExprTy> = None;
         if self.matches(vec![Token::EQUAL]) {
@@ -258,7 +267,7 @@ impl Parser {
         if let Token::IDENTIFIER(str) = name.token {
             return Ok(Stmt::Variable(str.clone(), init));
         }
-        Err(format!("FAILED didnt find a IDENT where expected"))
+        Err(self.err(format!("FAILED didnt find a IDENT where expected")))
     }
 
     fn or(&mut self) -> ExprResult {
@@ -295,7 +304,7 @@ impl Parser {
                 return Ok(mk_expr(Expr::Assign(lit, value.clone()),
                                   expr.context.merge(&value.context)));
             } else {
-                return Err(format!("Invalid assignment target"));
+                return Err(self.err(format!("Invalid assignment target")));
             }
         }
         Ok(expr)
@@ -306,7 +315,7 @@ impl Parser {
         self.assignment()
     }
 
-    fn statement(&mut self) -> Result<Stmt, String> {
+    fn statement(&mut self) -> Result<Stmt, ParserError> {
         if self.matches(vec![Token::PRINT]) {
             self.print_statement()
         } else if self.matches(vec![Token::WHILE]) {
@@ -322,7 +331,7 @@ impl Parser {
         }
     }
 
-    fn while_statement(&mut self) -> Result<Stmt, String> {
+    fn while_statement(&mut self) -> Result<Stmt, ParserError> {
         self.consume(Token::LPAREN, "Expected '(' after 'while'")?;
         let expr = self.expression()?;
         self.consume(Token::RPAREN, "Expected ')' after while condition")?;
@@ -330,7 +339,7 @@ impl Parser {
         Ok(Stmt::While(expr, Box::new(body)))
     }
 
-    fn if_statement(&mut self) -> Result<Stmt, String> {
+    fn if_statement(&mut self) -> Result<Stmt, ParserError> {
         self.consume(Token::LPAREN, "Expected '(' after 'if'")?;
         let test = self.expression()?;
         self.consume(Token::RPAREN, "Expected ')' after `if (... ")?;
@@ -342,7 +351,7 @@ impl Parser {
         Ok(Stmt::If(test, Box::new(if_branch), else_branch))
     }
 
-    fn for_statement(&mut self) -> Result<Stmt, String> {
+    fn for_statement(&mut self) -> Result<Stmt, ParserError> {
         self.consume(Token::LPAREN, "Expected a '(' after a for loop")?;
         let init: Option<Stmt> = if self.matches(vec![Token::SEMICOLON]) {
             None
@@ -363,7 +372,7 @@ impl Parser {
         self.consume(Token::RPAREN, "Expected ')' after for loop")?;
         let mut body = self.statement()?;
         if let Some(increment) = increment {
-            body = Stmt::Block(vec![body, Stmt::Expr(increment)], );
+            body = Stmt::Block(vec![body, Stmt::Expr(increment)]);
         }
         let src = self.tokens[self.current].context.clone();
         if condition.is_none() {
@@ -374,10 +383,9 @@ impl Parser {
             body = Stmt::Block(vec![init, body])
         }
         Ok(body)
-
     }
 
-    fn block(&mut self) -> Result<Stmt, String> {
+    fn block(&mut self) -> Result<Stmt, ParserError> {
         let mut stmts: Vec<Stmt> = vec![];
         while !self.check(Token::RBRACE) && !self.is_at_end() {
             stmts.push(self.declaration()?)
@@ -386,13 +394,13 @@ impl Parser {
         Ok(Stmt::Block(stmts))
     }
 
-    fn print_statement(&mut self) -> Result<Stmt, String> {
+    fn print_statement(&mut self) -> Result<Stmt, ParserError> {
         let value: ExprTy = self.expression()?;
         self.consume(Token::SEMICOLON, "Expected ';' after print value.")?;
         Ok(Stmt::Print(value))
     }
 
-    fn expression_statement(&mut self) -> Result<Stmt, String> {
+    fn expression_statement(&mut self) -> Result<Stmt, ParserError> {
         let value: ExprTy = self.expression()?;
         self.consume(Token::SEMICOLON, "Expected ';' after expression.")?;
         Ok(Stmt::Expr(value))
@@ -498,7 +506,7 @@ impl Parser {
         // if self.matches(vec![Token::IDENTIFIER]) {
         //     return Ok(mk_expr(Expr::Variable(self.previous().unwrap().), self.previous().unwrap().context));
         // }
-        Err(format!("Failed to match any expression for {}", self.tokens[self.current].context))
+        Err(self.err(format!("Failed to match any expression for `{}`", self.tokens[self.current].context.source())))
     }
 }
 

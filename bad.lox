@@ -1,5 +1,3 @@
-var y = 1;
-var xx = 3;
+var x = 1;
+var y = x + yy;
 var g = xx + 5;
-print g;
-print "gasdf";

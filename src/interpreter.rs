@@ -6,6 +6,7 @@ use crate::environment::Env;
 use crate::scanner::Literal::{NIL, BOOL};
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::fmt::{Display, Formatter};
 
 
 #[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord)]

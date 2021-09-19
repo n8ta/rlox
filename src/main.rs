@@ -80,7 +80,7 @@ impl Lox {
         let ast = match parse(tokens, Rc::new(src.src.clone())) {
             Ok(ast) => ast,
             Err(err) => {
-                eprintln!("{}", err);
+                eprintln!("[line:{}] Error: {}\n{}", err.context.line+1, &err.msg, err.context);
                 return;
             }
         };
