@@ -1,17 +1,16 @@
-use crate::parser::{ExprTy, Expr, UnaryOp, Stmt, LogicalOp};
+use crate::parser::types::{ExprTy, Expr, UnaryOp, Stmt, LogicalOp};
 use crate::scanner::{Literal};
-use crate::parser::BinOp::{EQUAL_EQUAL, BANG_EQUAL, PLUS, SLASH, MINUS, MULT, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, AND, OR};
+use crate::parser::types::BinOp::{EQUAL_EQUAL, BANG_EQUAL, PLUS, SLASH, MINUS, MULT, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, AND, OR};
 use crate::source_ref::SourceRef;
 use crate::environment::Env;
 use crate::scanner::Literal::{NIL, BOOL};
+use crate::parser::types::Callable;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::{Display, Formatter};
 
-
 #[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord)]
 pub struct RuntimeException {
-    // token: TokenInContext,
     pub msg: String,
     pub context: SourceRef,
 }
@@ -40,21 +39,26 @@ fn is_equal(left: &Literal, right: &Literal, context: &SourceRef) -> Result<bool
     }
 }
 
+pub fn interpret(stmts: &Vec<Stmt>, env: Env, globals: Env) -> Result<Literal, RuntimeException> {
+    let mut interp = Interpreter::new(env, globals);
+    interp.interpret(stmts)
+}
 
-struct Interpreter {
-    env: Rc<RefCell<Env>>,
+pub struct Interpreter {
+    pub env: Env,
+    pub globals: Env,
 }
 
 impl Interpreter {
-    fn new(env: Rc<RefCell<Env>>) -> Interpreter { Interpreter { env } }
+    fn new(env: Env, globals: Env) -> Interpreter { Interpreter { env, globals } }
 
-    fn interpret(&mut self, stmts: Vec<Stmt>) -> Result<Literal, RuntimeException> {
+    fn interpret(&mut self, stmts: &Vec<Stmt>) -> Result<Literal, RuntimeException> {
         let mut last = Literal::NIL;
-        for stmt in stmts {
+        for stmt in stmts.iter() {
             last = match stmt {
                 Stmt::Block(block_stmts) => {
                     let parent = self.env.clone();
-                    let new_scope = Rc::new(RefCell::new(Env::new(Some(parent.clone()))));
+                    let new_scope = Env::new(Some(parent.clone()));
                     self.env = new_scope;
                     let res = self.interpret(block_stmts);
                     self.env = parent;
@@ -67,14 +71,12 @@ impl Interpreter {
                 }
                 Stmt::Variable(name, value) => {
                     match value {
-                        // TODO: fix source ref
                         None => {
-                            let mut env = self.env.borrow_mut();
-                            env.declare(&name, &NIL);
+                            self.env.declare(&name, &NIL);
                         }
                         Some(lit) => {
                             let value = &self.execute_expr(&lit)?;
-                            self.env.clone().borrow_mut().declare(&name, value);
+                            self.env.declare(&name, value);
                         }
                     };
                     NIL
@@ -82,9 +84,9 @@ impl Interpreter {
                 Stmt::If(test, then_branch, else_branch) => {
                     let res = self.execute_expr(&test)?;
                     if res.truthy() {
-                        self.interpret(vec![*then_branch])?
+                        self.interpret(then_branch)?
                     } else if let Some(else_branch) = else_branch {
-                        self.interpret(vec![*else_branch])?
+                        self.interpret(else_branch)?
                     } else {
                         NIL
                     }
@@ -92,8 +94,13 @@ impl Interpreter {
                 Stmt::While(test, body) => {
                     while self.execute_expr(&test)?.truthy() {
                         let b = *body.clone();
-                        self.interpret(vec![b])?;
+                        self.interpret(&vec![b])?;
                     }
+                    NIL
+                }
+                Stmt::Function(func) => {
+                    self.env.declare(func.name().clone(),
+                                     &Literal::FUNC(Rc::new(func.clone())));
                     NIL
                 }
             }
@@ -157,11 +164,11 @@ impl Interpreter {
                 }
             }
             Expr::Variable(var) => {
-                self.env.borrow_mut().fetch(&var, &expr.context)
+                self.env.fetch(&var, &expr.context)
             }
             Expr::Assign(var, new_val) => {
                 let value = self.execute_expr(&new_val)?;
-                self.env.borrow_mut().assign(&var, &value, &expr.context)?;
+                self.env.assign(&var, &value, &expr.context)?;
                 Ok(Literal::NIL)
             }
             Expr::Logical(left, op, right) => {
@@ -173,11 +180,18 @@ impl Interpreter {
                 };
                 Ok(res)
             }
+            Expr::Call(callee, args) => {
+                let func = self.execute_expr(callee)?;
+                let mut evaluated_args = vec![];
+                for arg in args.iter() {
+                    evaluated_args.push(self.execute_expr(arg)?)
+                }
+                if let Literal::FUNC(mut func) = func {
+                    Ok(func.call(self.globals.clone(), evaluated_args)?)
+                } else {
+                    Err(RuntimeException::new(format!("Cannot call a {:?}", func), callee.context.clone()))
+                }
+            }
         }
     }
-}
-
-pub fn interpret(stmts: Vec<Stmt>, env: Rc<RefCell<Env>>) -> Result<Literal, RuntimeException> {
-    let mut interp = Interpreter::new(env);
-    interp.interpret(stmts)
 }

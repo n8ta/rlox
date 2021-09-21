@@ -1,37 +1,25 @@
 use std::collections::HashMap;
 use crate::source_ref::{SourceRef, Source};
-use std::fmt::{Display, Formatter};
+use std::fmt::{Display, Formatter, Debug};
 use crate::scanner::Token::IDENTIFIER;
 use std::rc::Rc;
+use crate::parser::types::Callable;
+use crate::scanner::Literal::{STRING, NUMBER, BOOL, FUNC};
+use std::cell::RefCell;
 
-lazy_static! {
-    static ref KEYWORDS: HashMap<String, Token> = {
-        let mut map: HashMap<String, Token> = HashMap::default();
-        map.insert(String::from("and"), Token::AND);
-        map.insert(String::from("else"), Token::ELSE);
-        map.insert(String::from("false"), Token::LITERAL(Literal::BOOL(false)));
-        map.insert(String::from("for"), Token::FOR);
-        map.insert(String::from("fun"), Token::FUN);
-        map.insert(String::from("if"), Token::IF);
-        map.insert(String::from("nil"), Token::LITERAL(Literal::NIL));
-        map.insert(String::from("or"), Token::OR);
-        map.insert(String::from("print"), Token::PRINT);
-        map.insert(String::from("return"), Token::RETURN);
-        map.insert(String::from("super"), Token::SUPER);
-        map.insert(String::from("this"), Token::THIS);
-        map.insert(String::from("true"), Token::LITERAL(Literal::BOOL(true)));
-        map.insert(String::from("var"), Token::VAR);
-        map.insert(String::from("while"), Token::WHILE);
-        map
-    };
-}
-
-#[derive(Clone, PartialOrd, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub enum Literal {
     STRING(String),
     NUMBER(f64),
     BOOL(bool),
     NIL,
+    FUNC(Rc<dyn Callable>)
+}
+
+impl Debug for dyn Callable {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("fun")
+    }
 }
 
 /// Equality is type equality not value equality
@@ -43,6 +31,7 @@ impl Literal {
                 Literal::NUMBER(_) => "NUMBER",
                 Literal::BOOL(_) => "BOOL",
                 Literal::NIL => "NIL",
+                Literal::FUNC(_) => "FUNC"
             }
         )
     }
@@ -52,6 +41,7 @@ impl Literal {
             Literal::NUMBER(_) => true,
             Literal::BOOL(bol) => *bol,
             Literal::NIL => false,
+            Literal::FUNC(_) => true,
         }
     }
     pub fn type_equal(&self, other: &Self) -> bool {
@@ -60,6 +50,7 @@ impl Literal {
             (Literal::NUMBER(_), Literal::NUMBER(_)) => true,
             (Literal::BOOL(_), Literal::BOOL(_)) => true,
             (Literal::NIL, Literal::NIL) => true,
+            (Literal::FUNC(_), Literal::FUNC(_)) => true,
             _ => false,
         }
     }
@@ -72,13 +63,14 @@ impl Display for Literal {
             Literal::NUMBER(num) => f.write_str(&num.to_string()),
             Literal::BOOL(bol) => f.write_str(if *bol { "true" } else { "false" }),
             Literal::NIL => f.write_str("nil"),
+            Literal::FUNC(name) => f.write_str("fn"),
         }
     }
 }
 
 #[allow(unused_mut)]
 #[allow(non_camel_case_types)]
-#[derive(PartialEq, PartialOrd, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum Token {
     PLUS,
     MULT,
@@ -117,7 +109,7 @@ pub enum Token {
     EOF,
 }
 
-#[derive(Debug, Clone, PartialOrd)]
+#[derive(Debug, Clone)]
 pub struct TokenInContext {
     pub token: Token,
     pub context: SourceRef,
@@ -181,18 +173,6 @@ impl Token {
     }
 }
 
-impl PartialEq<TokenInContext> for Token {
-    fn eq(&self, other: &TokenInContext) -> bool {
-        other.token == *self
-    }
-}
-
-impl PartialEq for TokenInContext {
-    fn eq(self: &TokenInContext, b: &TokenInContext) -> bool {
-        return self.token == b.token;
-    }
-}
-
 pub fn scanner(src: Rc<Source>) -> ScannerResult {
     let mut scanner = Scanner::new(src);
     scanner.scan_tokens()
@@ -205,10 +185,29 @@ struct Scanner {
     current: usize,
     line: usize,
     tokens: Vec<TokenInContext>,
+    keywords: HashMap<String, Token>,
 }
 
 impl Scanner {
-    fn new(src: Rc<Source>) -> Scanner { Scanner { source: src.clone(), src: src.src.clone(), start: 0, current: 0, line: 0, tokens: vec![] } }
+    fn new(src: Rc<Source>) -> Scanner {
+        let mut map: HashMap<String, Token> = HashMap::default();
+        map.insert(String::from("and"), Token::AND);
+        map.insert(String::from("else"), Token::ELSE);
+        map.insert(String::from("false"), Token::LITERAL(Literal::BOOL(false)));
+        map.insert(String::from("for"), Token::FOR);
+        map.insert(String::from("fun"), Token::FUN);
+        map.insert(String::from("if"), Token::IF);
+        map.insert(String::from("nil"), Token::LITERAL(Literal::NIL));
+        map.insert(String::from("or"), Token::OR);
+        map.insert(String::from("print"), Token::PRINT);
+        map.insert(String::from("return"), Token::RETURN);
+        map.insert(String::from("super"), Token::SUPER);
+        map.insert(String::from("this"), Token::THIS);
+        map.insert(String::from("true"), Token::LITERAL(Literal::BOOL(true)));
+        map.insert(String::from("var"), Token::VAR);
+        map.insert(String::from("while"), Token::WHILE);
+        Scanner { keywords: map, source: src.clone(), src: src.src.clone(), start: 0, current: 0, line: 0, tokens: vec![] }
+    }
     fn is_at_end(&self) -> bool {
         self.current >= self.src.chars().count()
     }
@@ -264,7 +263,7 @@ impl Scanner {
     fn identifier(&mut self) -> Result<(), String> {
         while self.peek().is_alphanumeric() { self.advance(); }
         let ident = self.src.chars().skip(self.start).take(self.current - self.start).collect::<String>();
-        match KEYWORDS.get(&ident) {
+        match self.keywords.get(&ident) {
             Some(k) => self.add_token(k.clone()),
             None => self.add_token(IDENTIFIER(ident)),
         };

@@ -3,9 +3,6 @@ use std::process::exit;
 use std::fs::read_to_string;
 use std::io::{BufReader, BufRead};
 
-#[macro_use(lazy_static)]
-extern crate lazy_static;
-
 mod scanner;
 mod parser;
 mod interpreter;
@@ -14,16 +11,34 @@ mod environment;
 mod e2e_tests;
 
 use scanner::scanner;
-use parser::parse;
-use crate::interpreter::{interpret};
+use parser::parsing::parse;
+use crate::interpreter::{interpret, Interpreter, RuntimeException};
 use crate::environment::Env;
 use std::rc::Rc;
 use std::cell::RefCell;
 use crate::source_ref::Source;
+use crate::parser::types::{Callable, Stmt};
+use crate::scanner::Literal;
+use std::time::{SystemTime, Instant, UNIX_EPOCH};
+
+
+
+#[derive(Clone, Debug)]
+struct ClockRuntimeFunc {}
+
+impl Callable for ClockRuntimeFunc {
+    fn arity(&self) -> u8 {
+        0
+    }
+
+    fn call(&self, globals: Env, args: Vec<Literal>) -> Result<Literal, RuntimeException> {
+        todo!()
+    }
+}
 
 struct Lox {
     had_error: bool,
-    env: Rc<RefCell<Env>>,
+    env: Env,
     src: Rc<Source>,
 }
 
@@ -32,7 +47,7 @@ impl Lox {
         return Lox {
             src: Rc::new(Source::new(String::new())),
             had_error: false,
-            env: Rc::new(RefCell::new(Env::new(None))),
+            env: Env::new(None)
         };
     }
     fn main(&mut self, args: Vec<String>) {
@@ -85,7 +100,10 @@ impl Lox {
             }
         };
 
-        match interpret(ast, self.env.clone()) {
+        let mut globals = Env::new(None);
+        let clock = Literal::FUNC(Rc::new(ClockRuntimeFunc {} ));
+        globals.declare("clock", &clock);
+        match interpret(&ast, self.env.clone(), globals.clone()) {
             Ok(_) => {}
             Err(err) =>
                 eprintln!("[line:{}] Error: {}\n{}", err.context.line+1, &err.msg, err.context)

@@ -15,9 +15,6 @@ impl Source {
     pub fn new(src: String) -> Source {
         Source { src }
     }
-    // "01234 56"
-    // "      v "
-    // "1234\n56"
     pub fn start_point(&self, offset: usize) -> usize {
         let mut seen_line = false;
         let chars: Vec<char> = self.src.chars().collect::<Vec<char>>();
