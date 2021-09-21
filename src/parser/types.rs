@@ -41,7 +41,7 @@ impl ExprInContext {
 
 pub trait Callable {
     fn arity(&self) -> u8;
-    fn call(&self, globals: Env, args: Vec<Literal>) -> Result<Literal, RuntimeException>;
+    fn call(&self, globals: Env, args: Vec<Literal>, context: SourceRef) -> Result<Literal, RuntimeException>;
 }
 
 
@@ -73,7 +73,7 @@ impl Callable for Func {
     fn arity(&self) -> u8 {
         self.inner.args.len() as u8
     }
-    fn call(&self, globals: Env, args: Vec<Literal>) -> Result<Literal, RuntimeException> {
+    fn call(&self, globals: Env, args: Vec<Literal>, context: SourceRef) -> Result<Literal, RuntimeException> {
         let mut new_env = Env::new(Some(globals.clone()));
         for i in 0..self.inner.args.len() {
             new_env.declare(&self.inner.args[i].0.clone(), &args[i]);

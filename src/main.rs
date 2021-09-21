@@ -16,10 +16,10 @@ use crate::interpreter::{interpret, Interpreter, RuntimeException};
 use crate::environment::Env;
 use std::rc::Rc;
 use std::cell::RefCell;
-use crate::source_ref::Source;
+use crate::source_ref::{Source, SourceRef};
 use crate::parser::types::{Callable, Stmt};
 use crate::scanner::Literal;
-use std::time::{SystemTime, Instant, UNIX_EPOCH};
+use std::time::{SystemTime, Instant, UNIX_EPOCH, SystemTimeError, Duration};
 
 
 
@@ -30,9 +30,12 @@ impl Callable for ClockRuntimeFunc {
     fn arity(&self) -> u8 {
         0
     }
-
-    fn call(&self, globals: Env, args: Vec<Literal>) -> Result<Literal, RuntimeException> {
-        todo!()
+    fn call(&self, globals: Env, args: Vec<Literal>, context: SourceRef) -> Result<Literal, RuntimeException> {
+        let t = match SystemTime::now().duration_since(UNIX_EPOCH) {
+            Ok(t) => t,
+            Err(err) => return Err(RuntimeException::new(format!("Unable to determine system time."), context))
+        };
+        Ok(Literal::NUMBER(t.as_secs_f64() * 1000.0))
     }
 }
 

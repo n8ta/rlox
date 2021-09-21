@@ -187,7 +187,7 @@ impl Interpreter {
                     evaluated_args.push(self.execute_expr(arg)?)
                 }
                 if let Literal::FUNC(mut func) = func {
-                    Ok(func.call(self.globals.clone(), evaluated_args)?)
+                    Ok(func.call(self.globals.clone(), evaluated_args, callee.context.clone())?)
                 } else {
                     Err(RuntimeException::new(format!("Cannot call a {:?}", func), callee.context.clone()))
                 }
