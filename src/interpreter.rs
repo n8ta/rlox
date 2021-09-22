@@ -4,7 +4,6 @@ use crate::parser::types::BinOp::{EQUAL_EQUAL, BANG_EQUAL, PLUS, SLASH, MINUS, M
 use crate::source_ref::SourceRef;
 use crate::environment::Env;
 use crate::scanner::Literal::{NIL, BOOL};
-use crate::parser::types::Callable;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::{Display, Formatter};
@@ -29,7 +28,7 @@ fn is_num(lit: Literal, context: &SourceRef) -> Result<f64, RuntimeException> {
     }
 }
 
-fn is_equal(left: &Literal, right: &Literal, context: &SourceRef) -> Result<bool, RuntimeException> {
+pub fn is_equal(left: &Literal, right: &Literal, context: &SourceRef) -> Result<bool, RuntimeException> {
     match (left, right) {
         (Literal::STRING(left), Literal::STRING(right)) => Ok(left == right),
         (Literal::NUMBER(left), Literal::NUMBER(right)) => Ok(left == right),

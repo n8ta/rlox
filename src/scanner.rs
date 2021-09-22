@@ -6,6 +6,7 @@ use std::rc::Rc;
 use crate::parser::types::Callable;
 use crate::scanner::Literal::{STRING, NUMBER, BOOL, FUNC};
 use std::cell::RefCell;
+use crate::interpreter::{is_equal, RuntimeException};
 
 #[derive(Clone, Debug)]
 pub enum Literal {
@@ -14,6 +15,16 @@ pub enum Literal {
     BOOL(bool),
     NIL,
     FUNC(Rc<dyn Callable>)
+}
+
+impl PartialEq for Literal {
+    fn eq(&self, other: &Self) -> bool {
+        let source = SourceRef::new(0,0,0,Rc::new(Source::new(format!(""))));
+        match is_equal(&self, other, &source) {
+            Ok(res) => res,
+            Err(failed) => false,
+        }
+    }
 }
 
 impl Debug for dyn Callable {
@@ -70,7 +81,7 @@ impl Display for Literal {
 
 #[allow(unused_mut)]
 #[allow(non_camel_case_types)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Token {
     PLUS,
     MULT,
@@ -113,6 +124,12 @@ pub enum Token {
 pub struct TokenInContext {
     pub token: Token,
     pub context: SourceRef,
+}
+
+impl PartialEq<TokenInContext> for Token {
+    fn eq(&self, other: &TokenInContext) -> bool {
+        *self == other.token
+    }
 }
 
 impl Display for TokenInContext {

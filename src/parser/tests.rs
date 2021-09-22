@@ -126,7 +126,7 @@ fn test_decl() {
     let src = Rc::new(Source::new(String::from("var varname = 1.0;")));
     let ast = Stmt::Variable(format!("varname"), Option::from(ExprTy::new(ExprInContext::new(
         Expr::Literal(Literal::NUMBER(1.0)),
-        SourceRef::new(0, 0, 0, src.clone())))));
+        SourceRef::new(0, 14, 3, src.clone())))));
     let tokens = scanner(src.clone()).unwrap();
     assert_eq!(parse(tokens, Rc::new(src.src.clone())).unwrap(), vec![ast]);
 }

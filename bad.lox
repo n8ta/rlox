@@ -1,6 +1,5 @@
-var x = 1;
-var y = x + yy;
-var g = xx + 5;
-for (var i = 0; i = i + 1) {
-    print "hello";
+fun sayHi(first, last) {
+  print "Hi, " + first + " " + last + "!";
 }
+
+sayHi("Dear", "Reader");

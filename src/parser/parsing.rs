@@ -137,16 +137,20 @@ impl Parser {
         let name = if let Token::IDENTIFIER(str) = name_in_context.token { str } else {
             return Err(self.err(format!("Expected a function name")));
         };
-        self.consume(Token::LPAREN, "Expected '(' after function name")?;
+        self.consume(Token::LPAREN, "Expected `(` after function name")?;
         let mut params_untyped: Vec<TokenInContext> = vec![];
-        if !self.check(RPAREN) {
-            loop {
-                if params_untyped.len() >= 255 {
-                    return Err(self.err(format!("Cannot have more than 255 parameters.")));
-                };
-                params_untyped.push(self.consume(IDENTIFIER(format!("")), "Expected parameter name of functon arg")?);
+        let mut first = true;
+        while !self.check(RPAREN) {
+            if !first {
+                self.consume(Token::COMMA, "Expected a `,` between function arguments")?;
             }
+            first = false;
+            if params_untyped.len() >= 255 {
+                return Err(self.err(format!("Cannot have more than 255 parameters.")));
+            };
+            params_untyped.push(self.consume(IDENTIFIER(format!("")), "Expected parameter name of function arg")?);
         }
+
         // TODO: Make less shit
         let mut params: Vec<(String, SourceRef)> = vec![];
         for param in params_untyped {
@@ -385,8 +389,10 @@ impl Parser {
     fn finish_call(&mut self, callee: ExprTy) -> ExprResult {
         let mut args: Vec<ExprTy> = vec![];
         let mut context = callee.context.clone();
+        let mut first = true;
         if !self.check(Token::RPAREN) {
-            while self.matches(vec![Token::COMMA]) {
+            while first || self.matches(vec![Token::COMMA]) {
+                first = false;
                 if args.len() >= 255 {
                     return Err(self.err("Can't have more than 255 args".to_string()));
                 }
@@ -395,7 +401,7 @@ impl Parser {
                 args.push(expr);
             }
         }
-        self.consume(Token::RPAREN, "Expected a ')' after function arguments")?;
+        self.consume(Token::RPAREN, "Expected a ')' after function arguments=")?;
         Ok(Box::new(ExprInContext::new(Expr::Call(callee, args), context)))
     }
 

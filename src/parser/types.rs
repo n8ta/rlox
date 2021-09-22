@@ -33,6 +33,12 @@ pub struct ExprInContext {
     pub expr: Expr,
 }
 
+impl PartialEq for ExprInContext {
+    fn eq(&self, other: &Self) -> bool {
+        self.expr == other.expr
+    }
+}
+
 impl ExprInContext {
     pub fn new(expr: Expr, context: SourceRef) -> ExprInContext {
         ExprInContext { expr, context }
@@ -41,11 +47,11 @@ impl ExprInContext {
 
 pub trait Callable {
     fn arity(&self) -> u8;
-    fn call(&self, globals: Env, args: Vec<Literal>, context: SourceRef) -> Result<Literal, RuntimeException>;
+    fn call(&self, globals: Env, args: Vec<Literal>, callsite: SourceRef) -> Result<Literal, RuntimeException>;
 }
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 struct FuncInner {
     name: String,
     args: Vec<(String, SourceRef)>,
@@ -53,7 +59,7 @@ struct FuncInner {
     name_context: SourceRef,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Func {
     inner: Rc<FuncInner>
 }
@@ -73,7 +79,7 @@ impl Callable for Func {
     fn arity(&self) -> u8 {
         self.inner.args.len() as u8
     }
-    fn call(&self, globals: Env, args: Vec<Literal>, context: SourceRef) -> Result<Literal, RuntimeException> {
+    fn call(&self, globals: Env, args: Vec<Literal>, callsite: SourceRef) -> Result<Literal, RuntimeException> {
         let mut new_env = Env::new(Some(globals.clone()));
         for i in 0..self.inner.args.len() {
             new_env.declare(&self.inner.args[i].0.clone(), &args[i]);
@@ -82,7 +88,7 @@ impl Callable for Func {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Stmt {
     Expr(ExprTy),
     Block(Vec<Stmt>),
@@ -93,13 +99,13 @@ pub enum Stmt {
     Function(Func),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum LogicalOp {
     AND,
     OR,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
     Binary(ExprTy, BinOp, ExprTy),
     Call(ExprTy, Vec<ExprTy>),
