@@ -1,9 +1,10 @@
 use crate::source_ref::{SourceRef, Source};
 use crate::scanner::{Literal};
-use crate::parser::{ExprInContext, Expr, parse, ExprTy, UnaryOp, BinOp, Stmt, Tokens};
+use crate::parser::{ExprInContext, Expr, parse, ExprTy, Tokens};
 use std::rc::Rc;
 use crate::scanner;
 use crate::parser::parsing::Parser;
+use crate::parser::types::{Stmt, BinOp, UnaryOp};
 
 /// Used in tests
 fn parse_expr(tokens: Tokens, source: Rc<String>) -> ExprTy {

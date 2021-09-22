@@ -1,6 +1,6 @@
-use std::cmp::{min, max, Ordering};
+use std::cmp::{min, max};
 use std::rc::Rc;
-use std::fmt::{Display, Formatter, Pointer};
+use std::fmt::{Display, Formatter};
 use colored::*;
 
 #[derive(Clone, PartialOrd, PartialEq, Ord, Eq, Debug)]
@@ -81,7 +81,7 @@ impl SourceRef {
 impl Display for SourceRef {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let source = self.src.src.chars().skip(self.offset).take(self.len).collect::<String>().red().to_string();
-        let before = self.src.prior_line(self.offset);;
+        let before = self.src.prior_line(self.offset);
         let after = self.src.next_line(self.offset+self.len);
 
         let combined = format!("{}{}{}", before, source, after);

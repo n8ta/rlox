@@ -1,16 +1,12 @@
 use crate::scanner::{Token, TokenInContext, Literal};
 use crate::scanner;
-use crate::scanner::Token::{MINUS, AND, OR, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, SLASH, MULT, LITERAL, LPAREN, RPAREN, BANG_EQUAL, EQUAL_EQUAL, VAR, SEMICOLON};
+use crate::scanner::Token::{MINUS, AND, OR, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, SLASH, MULT, BANG_EQUAL, EQUAL_EQUAL};
 use crate::source_ref::SourceRef;
 use std::rc::Rc;
-use crate::parser::Expr::Logical;
-use colored::*;
-use crate::interpreter::{Interpreter, RuntimeException, interpret};
-use std::cmp::Ordering;
-use std::fmt::{Debug, Formatter};
+use crate::interpreter::{RuntimeException, interpret, LoxControlFlow};
+use std::fmt::{Debug};
 use crate::environment::Env;
-use std::borrow::BorrowMut;
-use std::cell::RefCell;
+use crate::func::Func;
 
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -48,45 +44,9 @@ impl ExprInContext {
 pub trait Callable {
     fn arity(&self) -> u8;
     fn call(&self, globals: Env, args: Vec<Literal>, callsite: SourceRef) -> Result<Literal, RuntimeException>;
+    fn name(&self) -> &str;
 }
 
-
-#[derive(Clone, Debug, PartialEq)]
-struct FuncInner {
-    name: String,
-    args: Vec<(String, SourceRef)>,
-    body: Vec<Stmt>,
-    name_context: SourceRef,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Func {
-    inner: Rc<FuncInner>
-}
-
-
-impl Func {
-    pub fn new(name: String, args: Vec<(String, SourceRef)>, body: Vec<Stmt>, name_context: SourceRef) -> Func {
-        let inner = FuncInner { name, args, body, name_context };
-        Func { inner: Rc::new(inner) }
-    }
-    pub fn name(&self) -> &str {
-        &self.inner.name
-    }
-}
-
-impl Callable for Func {
-    fn arity(&self) -> u8 {
-        self.inner.args.len() as u8
-    }
-    fn call(&self, globals: Env, args: Vec<Literal>, callsite: SourceRef) -> Result<Literal, RuntimeException> {
-        let mut new_env = Env::new(Some(globals.clone()));
-        for i in 0..self.inner.args.len() {
-            new_env.declare(&self.inner.args[i].0.clone(), &args[i]);
-        }
-        interpret(&self.inner.body, new_env, globals)
-    }
-}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Stmt {
@@ -97,6 +57,7 @@ pub enum Stmt {
     If(ExprTy, Box<Vec<Stmt>>, Option<Box<Vec<Stmt>>>),
     While(ExprTy, Box<Stmt>),
     Function(Func),
+    Return(Option<ExprTy>, SourceRef)
 }
 
 #[derive(Clone, Debug, PartialEq)]

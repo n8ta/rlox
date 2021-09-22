@@ -1,12 +1,11 @@
-use crate::parser::types::{ExprTy, Expr, UnaryOp, Stmt, LogicalOp};
+use crate::parser::types::{ExprTy, Expr, UnaryOp, Stmt, LogicalOp, Callable};
 use crate::scanner::{Literal};
 use crate::parser::types::BinOp::{EQUAL_EQUAL, BANG_EQUAL, PLUS, SLASH, MINUS, MULT, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, AND, OR};
 use crate::source_ref::SourceRef;
 use crate::environment::Env;
-use crate::scanner::Literal::{NIL, BOOL};
+use crate::scanner::Literal::{NIL};
 use std::rc::Rc;
-use std::cell::RefCell;
-use std::fmt::{Display, Formatter};
+use crate::interpreter::LoxControlFlow::{CFRuntime, CFReturn};
 
 #[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord)]
 pub struct RuntimeException {
@@ -19,6 +18,19 @@ impl RuntimeException {
         RuntimeException { msg, context }
     }
 }
+
+pub enum LoxControlFlow {
+    CFRuntime(RuntimeException),
+    CFReturn(Literal, SourceRef)
+}
+
+impl From<RuntimeException> for LoxControlFlow {
+    fn from(rt: RuntimeException) -> Self {
+        CFRuntime(rt)
+    }
+}
+
+type InterpreterResult = Result<Literal, LoxControlFlow>;
 
 fn is_num(lit: Literal, context: &SourceRef) -> Result<f64, RuntimeException> {
     if let Literal::NUMBER(num) = lit {
@@ -38,7 +50,7 @@ pub fn is_equal(left: &Literal, right: &Literal, context: &SourceRef) -> Result<
     }
 }
 
-pub fn interpret(stmts: &Vec<Stmt>, env: Env, globals: Env) -> Result<Literal, RuntimeException> {
+pub fn interpret(stmts: &Vec<Stmt>, env: Env, globals: Env) -> InterpreterResult {
     let mut interp = Interpreter::new(env, globals);
     interp.interpret(stmts)
 }
@@ -48,25 +60,32 @@ pub struct Interpreter {
     pub globals: Env,
 }
 
+impl Into<InterpreterResult> for RuntimeException {
+    fn into(self) -> InterpreterResult {
+        Err(CFRuntime(self))
+    }
+}
+
 impl Interpreter {
     fn new(env: Env, globals: Env) -> Interpreter { Interpreter { env, globals } }
 
-    fn interpret(&mut self, stmts: &Vec<Stmt>) -> Result<Literal, RuntimeException> {
+    fn interpret(&mut self, stmts: &Vec<Stmt>) -> InterpreterResult {
         let mut last = Literal::NIL;
         for stmt in stmts.iter() {
-            last = match stmt {
+            match stmt {
                 Stmt::Block(block_stmts) => {
                     let parent = self.env.clone();
                     let new_scope = Env::new(Some(parent.clone()));
                     self.env = new_scope;
                     let res = self.interpret(block_stmts);
                     self.env = parent;
-                    res?
+                    res?;
                 }
-                Stmt::Expr(expr) => self.execute_expr(&expr)?,
+                Stmt::Expr(expr) => {
+                    self.execute_expr(&expr)?;
+                }
                 Stmt::Print(val) => {
                     println!("{}", self.execute_expr(&val)?);
-                    NIL
                 }
                 Stmt::Variable(name, value) => {
                     match value {
@@ -78,16 +97,13 @@ impl Interpreter {
                             self.env.declare(&name, value);
                         }
                     };
-                    NIL
                 }
                 Stmt::If(test, then_branch, else_branch) => {
                     let res = self.execute_expr(&test)?;
                     if res.truthy() {
-                        self.interpret(then_branch)?
+                        self.interpret(then_branch)?;
                     } else if let Some(else_branch) = else_branch {
-                        self.interpret(else_branch)?
-                    } else {
-                        NIL
+                        self.interpret(else_branch)?;
                     }
                 }
                 Stmt::While(test, body) => {
@@ -95,19 +111,28 @@ impl Interpreter {
                         let b = *body.clone();
                         self.interpret(&vec![b])?;
                     }
-                    NIL
                 }
                 Stmt::Function(func) => {
                     self.env.declare(func.name().clone(),
                                      &Literal::FUNC(Rc::new(func.clone())));
-                    NIL
+                }
+                Stmt::Return(expr, context) => {
+                    let val = match expr {
+                        None => Literal::NIL,
+                        Some(expr) => self.execute_expr(expr)?,
+                    };
+                    return Err(LoxControlFlow::CFReturn(val, context.clone()))
                 }
             }
         }
-        Ok(last)
+        Ok(NIL)
     }
 
-    fn execute_expr(&mut self, expr: &ExprTy) -> Result<Literal, RuntimeException> {
+    fn err(&self, message: String, context: SourceRef) -> InterpreterResult {
+        InterpreterResult::Err(LoxControlFlow::CFRuntime(RuntimeException::new(message, context)))
+    }
+
+    fn execute_expr(&mut self, expr: &ExprTy) -> InterpreterResult {
         match &expr.expr {
             Expr::Binary(left, op, right) => {
                 let context = left.context.merge(&right.context);
@@ -133,7 +158,7 @@ impl Interpreter {
                         match (&left, &right) {
                             (Literal::STRING(linner), Literal::STRING(rinner)) => Literal::STRING(format!("{}{}", linner, rinner)),
                             (Literal::NUMBER(linner), Literal::NUMBER(rinner)) => Literal::NUMBER(linner + rinner),
-                            _ => return Err(RuntimeException::new(format!("Cannot + {} and {}", left.tname(), right.tname()), expr.context.clone())),
+                            _ => return self.err(format!("Cannot + {} and {}", left.tname(), right.tname()), expr.context.clone()),
                         }
                     }
 
@@ -150,20 +175,20 @@ impl Interpreter {
                         if let Expr::Literal(Literal::BOOL(bool_l)) = inner.expr {
                             Ok(Literal::BOOL(!bool_l))
                         } else {
-                            Err(RuntimeException::new(format!("Cannot apply ! to a non-bool {:?}", inner), expr.context.clone()))
+                            Err(RuntimeException::new(format!("Cannot apply ! to a non-bool {:?}", inner), expr.context.clone()).into())
                         }
                     }
                     UnaryOp::MINUS => {
                         if let Expr::Literal(Literal::NUMBER(num)) = inner.expr {
                             Ok(Literal::NUMBER(-num))
                         } else {
-                            Err(RuntimeException::new(format!("Cannot apply - to a non-number {:?}", inner), expr.context.clone()))
+                            Err(RuntimeException::new(format!("Cannot apply - to a non-number {:?}", inner), expr.context.clone()).into())
                         }
                     }
                 }
             }
             Expr::Variable(var) => {
-                self.env.fetch(&var, &expr.context)
+                self.env.fetch(&var, &expr.context).or_else(|r| r.into())
             }
             Expr::Assign(var, new_val) => {
                 let value = self.execute_expr(&new_val)?;
@@ -185,10 +210,10 @@ impl Interpreter {
                 for arg in args.iter() {
                     evaluated_args.push(self.execute_expr(arg)?)
                 }
-                if let Literal::FUNC(mut func) = func {
+                if let Literal::FUNC(func) = func {
                     Ok(func.call(self.globals.clone(), evaluated_args, callee.context.clone())?)
                 } else {
-                    Err(RuntimeException::new(format!("Cannot call a {:?}", func), callee.context.clone()))
+                    Err(RuntimeException::new(format!("Cannot call a {:?}", func), callee.context.clone()).into())
                 }
             }
         }

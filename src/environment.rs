@@ -36,11 +36,9 @@ impl Env {
 
 impl EnvInner {
     fn new(enclosing: Option<Env>) -> EnvInner { EnvInner { env: HashMap::new(), enclosing } }
-
     fn declare(&mut self, key: &str, value: &Literal) {
         self.env.insert(key.to_string(), value.clone());
     }
-
     fn fetch(&mut self, key: &str, context: &SourceRef) -> Result<Literal, RuntimeException> {
         let result = self.env.get(key);
         if let Some(res) = result {
@@ -52,7 +50,6 @@ impl EnvInner {
         }
         return Err(RuntimeException::new(format!("Variable {} is undefined", key), context.clone()));
     }
-
     fn assign(&mut self, key: &str, value: &Literal, context: &SourceRef) -> Result<(), RuntimeException> {
         match self.env.get(key) {
             None => {

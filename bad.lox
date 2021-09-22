@@ -3,3 +3,22 @@ fun sayHi(first, last) {
 }
 
 sayHi("Dear", "Reader");
+var last = 0;
+var start = clock();
+
+for (var i = 0; i < 2; i = i + 1) {
+    last = clock();
+    var a = 1;
+    fun test() {
+        print "test";
+        a = a + 1;
+    }
+    print test;
+    print "tested";
+    print a;
+}
+last = clock();
+print "";
+print "Difference was ";
+print (last - start)/1000;
+print "s";

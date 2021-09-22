@@ -4,9 +4,7 @@ use std::fmt::{Display, Formatter, Debug};
 use crate::scanner::Token::IDENTIFIER;
 use std::rc::Rc;
 use crate::parser::types::Callable;
-use crate::scanner::Literal::{STRING, NUMBER, BOOL, FUNC};
-use std::cell::RefCell;
-use crate::interpreter::{is_equal, RuntimeException};
+use crate::interpreter::{is_equal};
 
 #[derive(Clone, Debug)]
 pub enum Literal {
@@ -22,14 +20,14 @@ impl PartialEq for Literal {
         let source = SourceRef::new(0,0,0,Rc::new(Source::new(format!(""))));
         match is_equal(&self, other, &source) {
             Ok(res) => res,
-            Err(failed) => false,
+            Err(_) => false,
         }
     }
 }
 
 impl Debug for dyn Callable {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str("fun")
+        f.write_str(&format!("fun<{}>", self.name()))
     }
 }
 
@@ -73,13 +71,12 @@ impl Display for Literal {
             Literal::STRING(str) => f.write_str(str),
             Literal::NUMBER(num) => f.write_str(&num.to_string()),
             Literal::BOOL(bol) => f.write_str(if *bol { "true" } else { "false" }),
-            Literal::NIL => f.write_str("nil"),
-            Literal::FUNC(name) => f.write_str("fn"),
+            Literal::NIL => f.write_str("NIL"),
+            Literal::FUNC(func) => f.write_str(&format!("fn<{}[{}]>", func.name(), func.arity())),
         }
     }
 }
 
-#[allow(unused_mut)]
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token {
@@ -280,7 +277,8 @@ impl Scanner {
     fn identifier(&mut self) -> Result<(), String> {
         while self.peek().is_alphanumeric() { self.advance(); }
         let ident = self.src.chars().skip(self.start).take(self.current - self.start).collect::<String>();
-        match self.keywords.get(&ident) {
+        let fetched: Option<Token> = self.keywords.get(&ident).and_then(|t| Some(t.clone()));
+        match fetched {
             Some(k) => self.add_token(k.clone()),
             None => self.add_token(IDENTIFIER(ident)),
         };

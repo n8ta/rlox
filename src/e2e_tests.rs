@@ -28,11 +28,11 @@ fn end_to_end_tests() {
             .expect(&format!("Expected a file called out{}.txt to exist", number.clone()));
 
         let mut stdout = String::from_utf8(res.stdout).unwrap();
-        let mut stderr = String::from_utf8(res.stderr).unwrap();
+        let stderr = String::from_utf8(res.stderr).unwrap();
 
 
         stdout.pop(); // rm \n
-        println!("test {}", number);
+        println!("===> test {}", number);
         println!("Actual: {}", stdout);
         println!("Expected: {}", expected);
         if stderr.len() != 0 {

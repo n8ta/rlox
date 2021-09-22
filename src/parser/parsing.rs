@@ -1,11 +1,9 @@
 use crate::scanner::{Token, TokenInContext, Literal};
-use crate::scanner;
-use crate::scanner::Token::{MINUS, AND, OR, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, SLASH, MULT, LITERAL, LPAREN, RPAREN, BANG_EQUAL, EQUAL_EQUAL, VAR, SEMICOLON, IDENTIFIER, LBRACE, RBRACE};
+use crate::scanner::Token::{GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, SLASH, MULT, LITERAL, LPAREN, RPAREN, BANG_EQUAL, EQUAL_EQUAL, VAR, SEMICOLON, IDENTIFIER, LBRACE};
 use crate::source_ref::SourceRef;
 use std::rc::Rc;
-use crate::parser::Expr::Logical;
-use colored::*;
-use crate::parser::types::{Tokens, Stmt, ParserError, ExprTy, LogicalOp, ExprInContext, Expr, UnaryOp, ExprResult, BinOp, Func};
+use crate::parser::types::{Tokens, Stmt, ParserError, ExprTy, LogicalOp, ExprInContext, Expr, UnaryOp, ExprResult, BinOp};
+use crate::func::Func;
 
 pub fn parse(tokens: Tokens, source: Rc<String>) -> Result<Vec<Stmt>, ParserError> {
     let mut parser: Parser = Parser::new(tokens, source);
@@ -163,7 +161,12 @@ impl Parser {
 
         self.consume(RPAREN, "Expected a ')' after function parameters")?;
         self.consume(LBRACE, "Expected a '{' after a function declaration")?;
-        let body: Vec<Stmt> = if let Stmt::Block(blk) = self.block()? { blk } else { panic!("block() didn't return a block"); };
+        let body: Vec<Stmt> =
+            if let Stmt::Block(blk) = self.block()? {
+                blk
+            } else {
+                panic!("block() didn't return a block");
+            };
         Ok(Stmt::Function(Func::new(name, params, body, name_in_context.context.clone())))
 
     }
@@ -184,7 +187,7 @@ impl Parser {
 
     fn or(&mut self) -> ExprResult {
         let mut expr = self.and()?;
-        while (self.matches(vec![Token::OR])) {
+        while self.matches(vec![Token::OR]) {
             let op = LogicalOp::new(self.previous().unwrap().token);
             let right = self.and()?;
             let cont = expr.context.merge(&right.context);
@@ -238,9 +241,21 @@ impl Parser {
             self.if_statement()
         } else if self.matches(vec![Token::FOR]) {
             self.for_statement()
+        } else if self.matches(vec![Token::RETURN]) {
+            self.return_statement()
         } else {
             self.expression_statement()
         }
+    }
+
+    fn return_statement(&mut self) -> Result<Stmt, ParserError> {
+        let keyword = self.previous().unwrap();
+        let mut value = None;
+        if !self.check(Token::SEMICOLON) {
+            value = Some(self.expression()?);
+        }
+        self.consume(Token::SEMICOLON, "Expected a ';' after a return statement");
+        Ok(Stmt::Return(value, keyword.context))
     }
 
     fn while_statement(&mut self) -> Result<Stmt, ParserError> {
