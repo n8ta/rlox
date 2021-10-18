@@ -10,6 +10,7 @@ mod source_ref;
 mod environment;
 mod e2e_tests;
 mod func;
+mod resolver;
 
 use scanner::scanner;
 use parser::parsing::parse;
@@ -20,7 +21,7 @@ use crate::source_ref::{Source, SourceRef};
 use crate::parser::types::{Callable};
 use crate::scanner::Literal;
 use std::time::{SystemTime, UNIX_EPOCH};
-
+use crate::resolver::{resolve};
 
 
 #[derive(Clone, Debug)]
@@ -30,7 +31,7 @@ impl Callable for ClockRuntimeFunc {
     fn arity(&self) -> u8 {
         0
     }
-    fn call(&self, _globals: Env, _args: Vec<Literal>, context: SourceRef) -> Result<Literal, RuntimeException> {
+    fn call(&self, _args: Vec<Literal>, context: SourceRef) -> Result<Literal, RuntimeException> {
         let t = match SystemTime::now().duration_since(UNIX_EPOCH) {
             Ok(t) => t,
             Err(_) => return Err(RuntimeException::new(format!("Unable to determine system time."), context))
@@ -102,7 +103,7 @@ impl Lox {
                 return;
             }
         };
-        let ast = match parse(tokens, Rc::new(src.src.clone())) {
+        let mut ast = match parse(tokens, src.clone()) {
             Ok(ast) => ast,
             Err(err) => {
                 eprintln!("[line:{}] Error: {}\n{}", err.context.line+1, &err.msg, err.context);
@@ -110,7 +111,15 @@ impl Lox {
             }
         };
 
-        match interpret(&ast, self.env.clone(), self.globals.clone()) {
+        match resolve(&mut ast) {
+            Ok(_) => {}
+            Err(err) => {
+                eprintln!("{}",err);
+                return;
+            }
+        }
+
+        match interpret(&ast, self.globals.clone(), self.globals.clone()) {
             Ok(_) => {}
             Err(err) => match err {
                 LoxControlFlow::CFRuntime(err) => {

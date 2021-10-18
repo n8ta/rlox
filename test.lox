@@ -1,6 +1,7 @@
-var y = 2;
-var x = 3;
-x = x * 8;
-x = y * x;
-print x;
-print y * 2;
+fun rec() {
+    print "pre";
+    print rec();
+    print "post";
+}
+
+rec();

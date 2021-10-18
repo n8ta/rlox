@@ -1,11 +1,11 @@
 use crate::scanner::{Token, TokenInContext, Literal};
 use crate::scanner::Token::{GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, SLASH, MULT, LITERAL, LPAREN, RPAREN, BANG_EQUAL, EQUAL_EQUAL, VAR, SEMICOLON, IDENTIFIER, LBRACE};
-use crate::source_ref::SourceRef;
+use crate::source_ref::{Source, SourceRef};
 use std::rc::Rc;
 use crate::parser::types::{Tokens, Stmt, ParserError, ExprTy, LogicalOp, ExprInContext, Expr, UnaryOp, ExprResult, BinOp};
-use crate::func::Func;
+use crate::func::{ParserFunc};
 
-pub fn parse(tokens: Tokens, source: Rc<String>) -> Result<Vec<Stmt>, ParserError> {
+pub fn parse(tokens: Tokens, source: Rc<Source>) -> Result<Vec<Stmt>, ParserError> {
     let mut parser: Parser = Parser::new(tokens, source);
     parser.parse()
 }
@@ -20,11 +20,11 @@ fn mk_expr(expr: Expr, context: SourceRef) -> ExprTy {
 pub(crate) struct Parser {
     tokens: Tokens,
     current: usize,
-    source: Rc<String>,
+    source: Rc<Source>,
 }
 
 impl Parser {
-    pub(crate) fn new(tokens: Tokens, source: Rc<String>) -> Parser {
+    pub(crate) fn new(tokens: Tokens, source: Rc<Source>) -> Parser {
         Parser { tokens, current: 0, source }
     }
 
@@ -167,7 +167,7 @@ impl Parser {
             } else {
                 panic!("block() didn't return a block");
             };
-        Ok(Stmt::Function(Func::new(name, params, body, name_in_context.context.clone())))
+        Ok(Stmt::Function(ParserFunc::new(name, params, body, name_in_context.context.clone())))
 
     }
 
@@ -254,7 +254,7 @@ impl Parser {
         if !self.check(Token::SEMICOLON) {
             value = Some(self.expression()?);
         }
-        self.consume(Token::SEMICOLON, "Expected a ';' after a return statement");
+        self.consume(Token::SEMICOLON, "Expected a ';' after a return statement")?;
         Ok(Stmt::Return(value, keyword.context))
     }
 

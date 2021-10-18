@@ -78,6 +78,7 @@ impl Display for Literal {
 }
 
 #[allow(non_camel_case_types)]
+#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token {
     PLUS,

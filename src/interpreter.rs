@@ -1,11 +1,12 @@
-use crate::parser::types::{ExprTy, Expr, UnaryOp, Stmt, LogicalOp, Callable};
+use crate::parser::types::{ExprTy, Expr, UnaryOp, Stmt, LogicalOp};
 use crate::scanner::{Literal};
 use crate::parser::types::BinOp::{EQUAL_EQUAL, BANG_EQUAL, PLUS, SLASH, MINUS, MULT, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, AND, OR};
 use crate::source_ref::SourceRef;
 use crate::environment::Env;
 use crate::scanner::Literal::{NIL};
 use std::rc::Rc;
-use crate::interpreter::LoxControlFlow::{CFRuntime, CFReturn};
+use crate::func::Func;
+use std::fmt::{Debug};
 
 #[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord)]
 pub struct RuntimeException {
@@ -26,7 +27,7 @@ pub enum LoxControlFlow {
 
 impl From<RuntimeException> for LoxControlFlow {
     fn from(rt: RuntimeException) -> Self {
-        CFRuntime(rt)
+        LoxControlFlow::CFRuntime(rt)
     }
 }
 
@@ -60,9 +61,10 @@ pub struct Interpreter {
     pub globals: Env,
 }
 
+
 impl Into<InterpreterResult> for RuntimeException {
     fn into(self) -> InterpreterResult {
-        Err(CFRuntime(self))
+        Err(LoxControlFlow::CFRuntime(self))
     }
 }
 
@@ -70,7 +72,6 @@ impl Interpreter {
     fn new(env: Env, globals: Env) -> Interpreter { Interpreter { env, globals } }
 
     fn interpret(&mut self, stmts: &Vec<Stmt>) -> InterpreterResult {
-        let mut last = Literal::NIL;
         for stmt in stmts.iter() {
             match stmt {
                 Stmt::Block(block_stmts) => {
@@ -114,7 +115,9 @@ impl Interpreter {
                 }
                 Stmt::Function(func) => {
                     self.env.declare(func.name().clone(),
-                                     &Literal::FUNC(Rc::new(func.clone())));
+                                     &Literal::FUNC(Rc::new(
+                                         Func::new(func.clone(), self.env.clone(), self.globals.clone())
+                                     )));
                 }
                 Stmt::Return(expr, context) => {
                     let val = match expr {
@@ -188,7 +191,11 @@ impl Interpreter {
                 }
             }
             Expr::Variable(var) => {
-                self.env.fetch(&var, &expr.context).or_else(|r| r.into())
+                if let Some(distance) = expr.scope {
+                    self.env.get_at(distance, &var, &expr.context).or_else(|r| r.into())
+                } else {
+                    self.globals.fetch( &var, &expr.context).or_else(|r| r.into())
+                }
             }
             Expr::Assign(var, new_val) => {
                 let value = self.execute_expr(&new_val)?;
@@ -211,11 +218,19 @@ impl Interpreter {
                     evaluated_args.push(self.execute_expr(arg)?)
                 }
                 if let Literal::FUNC(func) = func {
-                    Ok(func.call(self.globals.clone(), evaluated_args, callee.context.clone())?)
+                    Ok(func.call(evaluated_args, callee.context.clone())?)
                 } else {
                     Err(RuntimeException::new(format!("Cannot call a {:?}", func), callee.context.clone()).into())
                 }
             }
+        }
+    }
+
+    fn lookup_variable(&self, name: &str, expr: ExprTy) -> Result<Literal, RuntimeException> {
+        if let Some(dist) = expr.scope {
+            self.env.get_at(dist, name, &expr.context)
+        } else {
+            self.globals.fetch(name, &expr.context)
         }
     }
 }

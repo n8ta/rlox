@@ -32,7 +32,11 @@ fn end_to_end_tests() {
 
 
         stdout.pop(); // rm \n
-        println!("===> test {}", number);
+
+        if stdout == expected { continue }
+
+
+        println!("===> test {}", test_path.to_str().unwrap());
         println!("Actual: {}", stdout);
         println!("Expected: {}", expected);
         if stderr.len() != 0 {

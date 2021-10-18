@@ -7,7 +7,7 @@ use crate::parser::parsing::Parser;
 use crate::parser::types::{Stmt, BinOp, UnaryOp};
 
 /// Used in tests
-fn parse_expr(tokens: Tokens, source: Rc<String>) -> ExprTy {
+fn parse_expr(tokens: Tokens, source: Rc<Source>) -> ExprTy {
     let mut parser = Parser::new(tokens, source);
     parser.expression().unwrap()
 }
@@ -16,7 +16,7 @@ fn parse_expr(tokens: Tokens, source: Rc<String>) -> ExprTy {
 fn help(str: &str) -> ExprTy {
     let mut tokens = scanner(Rc::new(Source::new(str.to_string()))).unwrap();
     tokens.pop();
-    parse_expr(tokens, Rc::new(String::from("")))
+    parse_expr(tokens, Rc::new(Source::simple()))
 }
 
 
@@ -129,7 +129,7 @@ fn test_decl() {
         Expr::Literal(Literal::NUMBER(1.0)),
         SourceRef::new(0, 14, 3, src.clone())))));
     let tokens = scanner(src.clone()).unwrap();
-    assert_eq!(parse(tokens, Rc::new(src.src.clone())).unwrap(), vec![ast]);
+    assert_eq!(parse(tokens, src.clone()).unwrap(), vec![ast]);
 }
 
 #[test]
@@ -149,5 +149,5 @@ fn test_assign() {
     let ast = vec![Stmt::Expr(Box::new(expr))];
 
     let tokens = scanner(src.clone()).unwrap();
-    assert_eq!(parse(tokens, Rc::new(src.src.clone())).unwrap()[0], ast[0]);
+    assert_eq!(parse(tokens, src.clone()).unwrap()[0], ast[0]);
 }

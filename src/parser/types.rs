@@ -2,11 +2,9 @@ use crate::scanner::{Token, TokenInContext, Literal};
 use crate::scanner;
 use crate::scanner::Token::{MINUS, AND, OR, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, SLASH, MULT, BANG_EQUAL, EQUAL_EQUAL};
 use crate::source_ref::SourceRef;
-use std::rc::Rc;
-use crate::interpreter::{RuntimeException, interpret, LoxControlFlow};
-use std::fmt::{Debug};
-use crate::environment::Env;
-use crate::func::Func;
+use crate::interpreter::{RuntimeException};
+use std::fmt::{Debug, Formatter};
+use crate::func::{ParserFunc};
 
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -23,10 +21,17 @@ pub type Tokens = Vec<TokenInContext>;
 
 pub type ExprTy = Box<ExprInContext>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ExprInContext {
     pub context: SourceRef,
     pub expr: Expr,
+    pub scope: Option<usize>,
+}
+
+impl Debug for ExprInContext {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&format!("ExprInContext [expr:{:?} scope:{:?}]", self.expr, self.scope))
+    }
 }
 
 impl PartialEq for ExprInContext {
@@ -37,13 +42,13 @@ impl PartialEq for ExprInContext {
 
 impl ExprInContext {
     pub fn new(expr: Expr, context: SourceRef) -> ExprInContext {
-        ExprInContext { expr, context }
+        ExprInContext { expr, context, scope: None }
     }
 }
 
 pub trait Callable {
     fn arity(&self) -> u8;
-    fn call(&self, globals: Env, args: Vec<Literal>, callsite: SourceRef) -> Result<Literal, RuntimeException>;
+    fn call(&self, args: Vec<Literal>, callsite: SourceRef) -> Result<Literal, RuntimeException>;
     fn name(&self) -> &str;
 }
 
@@ -56,7 +61,7 @@ pub enum Stmt {
     Variable(String, Option<ExprTy>),
     If(ExprTy, Box<Vec<Stmt>>, Option<Box<Vec<Stmt>>>),
     While(ExprTy, Box<Stmt>),
-    Function(Func),
+    Function(ParserFunc),
     Return(Option<ExprTy>, SourceRef)
 }
 

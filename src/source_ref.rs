@@ -60,6 +60,10 @@ pub struct SourceRef {
 }
 
 impl SourceRef {
+    #[allow(dead_code)]
+    pub fn simple() -> SourceRef {
+        SourceRef { line: 0, offset: 0, len: 0, src: Rc::new(Source::simple()) }
+    }
     pub fn new(offset: usize, len: usize, line: usize, src: Rc<Source>) -> SourceRef {
         SourceRef { offset, len, src, line }
     }

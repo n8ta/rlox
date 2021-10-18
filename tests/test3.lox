@@ -6,12 +6,12 @@ print x;
 }
 print x;
 {
-    var x = x + 5;
+    var x = 2 + 5;
     print x;
 }
 print x;
 {{{{{
-    var x = x + 6;
+    var x = 2 + 6;
     print x;
 }}}}}
 {
