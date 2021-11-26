@@ -1,5 +1,5 @@
 use crate::source_ref::{SourceRef, Source};
-use crate::scanner::{Literal};
+use crate::scanner::{Value};
 use crate::parser::{ExprInContext, Expr, parse, ExprTy, Tokens};
 use std::rc::Rc;
 use crate::scanner;
@@ -27,18 +27,18 @@ fn mk_expr_test(expr: Expr) -> ExprTy {
 
 #[test]
 fn test_unary() {
-    assert_eq!(help("1"), mk_expr_test(Expr::Literal(Literal::NUMBER(1.0))));
+    assert_eq!(help("1"), mk_expr_test(Expr::Literal(Value::NUMBER(1.0))));
     assert_eq!(mk_expr_test(
         Expr::Unary(
             UnaryOp::MINUS,
-            mk_expr_test(Expr::Literal(Literal::NUMBER(1.0))))
+            mk_expr_test(Expr::Literal(Value::NUMBER(1.0))))
     ), help("-1"));
     assert_eq!(mk_expr_test(
         Expr::Unary(
             UnaryOp::MINUS,
             mk_expr_test(Expr::Unary(
                 UnaryOp::MINUS,
-                mk_expr_test(Expr::Literal(Literal::NUMBER(1.0)))))),
+                mk_expr_test(Expr::Literal(Value::NUMBER(1.0)))))),
     ), help("--1"));
     assert_eq!(mk_expr_test(
         Expr::Unary(
@@ -47,7 +47,7 @@ fn test_unary() {
                 UnaryOp::MINUS,
                 mk_expr_test(Expr::Unary(
                     UnaryOp::MINUS,
-                    mk_expr_test(Expr::Literal(Literal::NUMBER(1.0)))))))),
+                    mk_expr_test(Expr::Literal(Value::NUMBER(1.0)))))))),
     ), help("---1"));
     assert_ne!(mk_expr_test(
         Expr::Unary(
@@ -56,12 +56,12 @@ fn test_unary() {
                 UnaryOp::MINUS,
                 mk_expr_test(Expr::Unary(
                     UnaryOp::MINUS,
-                    mk_expr_test(Expr::Literal(Literal::NUMBER(1.0)))))))),
+                    mk_expr_test(Expr::Literal(Value::NUMBER(1.0)))))))),
     ), help("----1")); // wrong # of minuses
 }
 
 fn num(fl: f64) -> ExprTy {
-    mk_expr_test(Expr::Literal(Literal::NUMBER(fl)))
+    mk_expr_test(Expr::Literal(Value::NUMBER(fl)))
 }
 
 #[test]
@@ -111,10 +111,10 @@ fn test_precedence() {
 #[test]
 fn test_primaries() {
     let one = num(1.0);
-    let hello = mk_expr_test(Expr::Literal(Literal::STRING("hello".into())));
-    let fls = mk_expr_test(Expr::Literal(Literal::BOOL(false)));
-    let tru = mk_expr_test(Expr::Literal(Literal::BOOL(true)));
-    let nil = mk_expr_test(Expr::Literal(Literal::NIL));
+    let hello = mk_expr_test(Expr::Literal(Value::STRING("hello".into())));
+    let fls = mk_expr_test(Expr::Literal(Value::BOOL(false)));
+    let tru = mk_expr_test(Expr::Literal(Value::BOOL(true)));
+    let nil = mk_expr_test(Expr::Literal(Value::NIL));
     assert_eq!(one.clone(), help("1"));
     assert_eq!(hello.clone(), help("   \"hello\""));
     assert_eq!(fls.clone(), help("false"));
@@ -126,7 +126,7 @@ fn test_primaries() {
 fn test_decl() {
     let src = Rc::new(Source::new(String::from("var varname = 1.0;")));
     let ast = Stmt::Variable(format!("varname"), Option::from(ExprTy::new(ExprInContext::new(
-        Expr::Literal(Literal::NUMBER(1.0)),
+        Expr::Literal(Value::NUMBER(1.0)),
         SourceRef::new(0, 14, 3, src.clone())))));
     let tokens = scanner(src.clone()).unwrap();
     assert_eq!(parse(tokens, src.clone()).unwrap(), vec![ast]);
@@ -141,7 +141,7 @@ fn test_assign() {
     let expr = ExprInContext::new(Expr::Assign(format!("varname"),
                                                Box::new(
                                                    ExprInContext::new(
-                                                       Expr::Literal(scanner::Literal::NUMBER(1.0)),
+                                                       Expr::Literal(scanner::Value::NUMBER(1.0)),
                                                        context
                                                    ))),
                                   context2);

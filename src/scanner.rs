@@ -3,77 +3,13 @@ use crate::source_ref::{SourceRef, Source};
 use std::fmt::{Display, Formatter, Debug};
 use crate::scanner::Token::IDENTIFIER;
 use std::rc::Rc;
-use crate::parser::types::Callable;
-use crate::interpreter::{is_equal};
+use crate::runtime::is_equal;
+use crate::{Callable, Value};
 
-#[derive(Clone, Debug)]
-pub enum Literal {
-    STRING(String),
-    NUMBER(f64),
-    BOOL(bool),
-    NIL,
-    FUNC(Rc<dyn Callable>)
-}
-
-impl PartialEq for Literal {
-    fn eq(&self, other: &Self) -> bool {
-        let source = SourceRef::new(0,0,0,Rc::new(Source::new(format!(""))));
-        match is_equal(&self, other, &source) {
-            Ok(res) => res,
-            Err(_) => false,
-        }
-    }
-}
 
 impl Debug for dyn Callable {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(&format!("fun<{}>", self.name()))
-    }
-}
-
-/// Equality is type equality not value equality
-impl Literal {
-    pub fn tname(&self) -> String {
-        String::from(
-            match self {
-                Literal::STRING(_) => "STRING",
-                Literal::NUMBER(_) => "NUMBER",
-                Literal::BOOL(_) => "BOOL",
-                Literal::NIL => "NIL",
-                Literal::FUNC(_) => "FUNC"
-            }
-        )
-    }
-    pub fn truthy(&self) -> bool {
-        match self {
-            Literal::STRING(_) => true,
-            Literal::NUMBER(_) => true,
-            Literal::BOOL(bol) => *bol,
-            Literal::NIL => false,
-            Literal::FUNC(_) => true,
-        }
-    }
-    pub fn type_equal(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Literal::STRING(_), Literal::STRING(_)) => true,
-            (Literal::NUMBER(_), Literal::NUMBER(_)) => true,
-            (Literal::BOOL(_), Literal::BOOL(_)) => true,
-            (Literal::NIL, Literal::NIL) => true,
-            (Literal::FUNC(_), Literal::FUNC(_)) => true,
-            _ => false,
-        }
-    }
-}
-
-impl Display for Literal {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Literal::STRING(str) => f.write_str(str),
-            Literal::NUMBER(num) => f.write_str(&num.to_string()),
-            Literal::BOOL(bol) => f.write_str(if *bol { "true" } else { "false" }),
-            Literal::NIL => f.write_str("NIL"),
-            Literal::FUNC(func) => f.write_str(&format!("fn<{}[{}]>", func.name(), func.arity())),
-        }
     }
 }
 
@@ -92,7 +28,7 @@ pub enum Token {
     BANG_EQUAL,
     BANG,
     MINUS,
-    LITERAL(Literal),
+    LITERAL(Value),
     IDENTIFIER(String),
     SEMICOLON,
     COMMA,
@@ -208,19 +144,20 @@ impl Scanner {
         let mut map: HashMap<String, Token> = HashMap::default();
         map.insert(String::from("and"), Token::AND);
         map.insert(String::from("else"), Token::ELSE);
-        map.insert(String::from("false"), Token::LITERAL(Literal::BOOL(false)));
+        map.insert(String::from("false"), Token::LITERAL(Value::BOOL(false)));
         map.insert(String::from("for"), Token::FOR);
         map.insert(String::from("fun"), Token::FUN);
         map.insert(String::from("if"), Token::IF);
-        map.insert(String::from("nil"), Token::LITERAL(Literal::NIL));
+        map.insert(String::from("nil"), Token::LITERAL(Value::NIL));
         map.insert(String::from("or"), Token::OR);
         map.insert(String::from("print"), Token::PRINT);
         map.insert(String::from("return"), Token::RETURN);
         map.insert(String::from("super"), Token::SUPER);
         map.insert(String::from("this"), Token::THIS);
-        map.insert(String::from("true"), Token::LITERAL(Literal::BOOL(true)));
+        map.insert(String::from("true"), Token::LITERAL(Value::BOOL(true)));
         map.insert(String::from("var"), Token::VAR);
         map.insert(String::from("while"), Token::WHILE);
+        map.insert(String::from("class"), Token::CLASS);
         Scanner { keywords: map, source: src.clone(), src: src.src.clone(), start: 0, current: 0, line: 0, tokens: vec![] }
     }
     fn is_at_end(&self) -> bool {
@@ -254,7 +191,7 @@ impl Scanner {
         self.advance();
         self.add_token(
             Token::LITERAL(
-                Literal::STRING(
+                Value::STRING(
                     self.src.chars().skip(self.start + 1).take(self.current - self.start - 2).collect::<String>())));
         return Ok(());
     }
@@ -272,7 +209,7 @@ impl Scanner {
                 return Err(String::from("Unable to parse f64 {}"));
             }
         };
-        self.add_token(Token::LITERAL(Literal::NUMBER(float)));
+        self.add_token(Token::LITERAL(Value::NUMBER(float)));
         Ok(())
     }
     fn identifier(&mut self) -> Result<(), String> {
@@ -415,28 +352,28 @@ fn test_basic_lexemes() {
 #[test]
 fn test_strings() {
     type TT = Token;
-    assert_eq!(vec![TT::LITERAL(Literal::STRING(String::from("Cat"))), TT::LITERAL(Literal::STRING(String::from("HAT")))], test_scanner(String::from("\"Cat\" \"HAT\"")));
-    assert_eq!(vec![TT::LITERAL(Literal::STRING(String::from("Helloßßßßß")))], test_scanner(String::from("\"Helloßßßßß\"")));
-    assert_eq!(vec![TT::LITERAL(Literal::STRING(String::from("Hello"))), TT::GREATER], test_scanner(String::from("\"Hello\" >")));
-    assert_eq!(vec![TT::LITERAL(Literal::STRING(String::from("")))], test_scanner(String::from("   \t\r\n\"\" ")));
+    assert_eq!(vec![TT::LITERAL(Value::STRING(String::from("Cat"))), TT::LITERAL(Value::STRING(String::from("HAT")))], test_scanner(String::from("\"Cat\" \"HAT\"")));
+    assert_eq!(vec![TT::LITERAL(Value::STRING(String::from("Helloßßßßß")))], test_scanner(String::from("\"Helloßßßßß\"")));
+    assert_eq!(vec![TT::LITERAL(Value::STRING(String::from("Hello"))), TT::GREATER], test_scanner(String::from("\"Hello\" >")));
+    assert_eq!(vec![TT::LITERAL(Value::STRING(String::from("")))], test_scanner(String::from("   \t\r\n\"\" ")));
 }
 
 #[test]
 fn test_numbers() {
     type TT = Token;
-    assert_eq!(vec![TT::LITERAL(Literal::NUMBER(123.0))], test_scanner(String::from("123")));
-    assert_eq!(vec![TT::LITERAL(Literal::NUMBER(123.34))], test_scanner(String::from("123.34")));
-    assert_eq!(vec![TT::MINUS, TT::LITERAL(Literal::NUMBER(123.0))], test_scanner(String::from("-123.0")));
-    assert_ne!(vec![TT::MINUS, TT::LITERAL(Literal::NUMBER(124.0))], test_scanner(String::from("-123.0")));
-    assert_ne!(vec![TT::LITERAL(Literal::NUMBER(124.0))], test_scanner(String::from("123.0")));
-    assert_eq!(vec![TT::LITERAL(Literal::NUMBER(0.0))], test_scanner(String::from("0.0")));
+    assert_eq!(vec![TT::LITERAL(Value::NUMBER(123.0))], test_scanner(String::from("123")));
+    assert_eq!(vec![TT::LITERAL(Value::NUMBER(123.34))], test_scanner(String::from("123.34")));
+    assert_eq!(vec![TT::MINUS, TT::LITERAL(Value::NUMBER(123.0))], test_scanner(String::from("-123.0")));
+    assert_ne!(vec![TT::MINUS, TT::LITERAL(Value::NUMBER(124.0))], test_scanner(String::from("-123.0")));
+    assert_ne!(vec![TT::LITERAL(Value::NUMBER(124.0))], test_scanner(String::from("123.0")));
+    assert_eq!(vec![TT::LITERAL(Value::NUMBER(0.0))], test_scanner(String::from("0.0")));
 }
 
 #[test]
 fn test_misc() {
     type TT = Token;
-    assert_eq!(vec![TT::AND, TT::OR, TT::LITERAL(Literal::BOOL(true)), TT::LITERAL(Literal::BOOL(false))], test_scanner(String::from("and or true\n false")));
-    assert_eq!(vec![TT::LITERAL(Literal::NIL), TT::PRINT, TT::RETURN, TT::WHILE], test_scanner(String::from("nil print return while")));
+    assert_eq!(vec![TT::AND, TT::OR, TT::LITERAL(Value::BOOL(true)), TT::LITERAL(Value::BOOL(false))], test_scanner(String::from("and or true\n false")));
+    assert_eq!(vec![TT::LITERAL(Value::NIL), TT::PRINT, TT::RETURN, TT::WHILE], test_scanner(String::from("nil print return while")));
 }
 
 #[test]
@@ -447,6 +384,6 @@ fn test_identifier_and_assign() {
                test_scanner(format!("var Hello;")));
 
     let hello = TT::IDENTIFIER("Hello".to_string());
-    assert_eq!(vec![TT::VAR, TT::IDENTIFIER("Hello".to_string()), TT::SEMICOLON, hello.clone(), TT::EQUAL, hello.clone(), TT::PLUS, TT::LITERAL(Literal::NUMBER(1.0)), TT::SEMICOLON],
+    assert_eq!(vec![TT::VAR, TT::IDENTIFIER("Hello".to_string()), TT::SEMICOLON, hello.clone(), TT::EQUAL, hello.clone(), TT::PLUS, TT::LITERAL(Value::NUMBER(1.0)), TT::SEMICOLON],
                test_scanner(format!("var Hello;\nHello = Hello + 1;")));
 }

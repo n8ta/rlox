@@ -1,10 +1,10 @@
-use crate::scanner::{Token, TokenInContext, Literal};
+use crate::scanner::{Token, TokenInContext};
 use crate::scanner;
 use crate::scanner::Token::{MINUS, AND, OR, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, SLASH, MULT, BANG_EQUAL, EQUAL_EQUAL};
 use crate::source_ref::SourceRef;
-use crate::interpreter::{RuntimeException};
+use crate::runtime::interpreter::{RuntimeException};
 use std::fmt::{Debug, Formatter};
-use crate::func::{ParserFunc};
+use crate::parser::{Class, ParserFunc};
 
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -46,14 +46,7 @@ impl ExprInContext {
     }
 }
 
-pub trait Callable {
-    fn arity(&self) -> u8;
-    fn call(&self, args: Vec<Literal>, callsite: SourceRef) -> Result<Literal, RuntimeException>;
-    fn name(&self) -> &str;
-}
-
-
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Stmt {
     Expr(ExprTy),
     Block(Vec<Stmt>),
@@ -62,7 +55,8 @@ pub enum Stmt {
     If(ExprTy, Box<Vec<Stmt>>, Option<Box<Vec<Stmt>>>),
     While(ExprTy, Box<Stmt>),
     Function(ParserFunc),
-    Return(Option<ExprTy>, SourceRef)
+    Return(Option<ExprTy>, SourceRef),
+    Class(Class)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -76,8 +70,10 @@ pub enum Expr {
     Binary(ExprTy, BinOp, ExprTy),
     Call(ExprTy, Vec<ExprTy>),
     Grouping(ExprTy),
-    Literal(scanner::Literal),
+    Get(ExprTy, String),
+    Literal(crate::runtime::Value),
     Unary(UnaryOp, ExprTy),
+    Set(ExprTy, String, ExprTy),
     Variable(String),
     Assign(String, ExprTy),
     Logical(ExprTy, LogicalOp, ExprTy),

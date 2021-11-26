@@ -5,21 +5,18 @@ use std::io::{BufReader, BufRead};
 
 mod scanner;
 mod parser;
-mod interpreter;
 mod source_ref;
-mod environment;
 mod e2e_tests;
-mod func;
 mod resolver;
+mod runtime;
 
 use scanner::scanner;
-use parser::parsing::parse;
-use crate::interpreter::{interpret, RuntimeException, LoxControlFlow};
-use crate::environment::Env;
+use crate::parser::parse;
+use crate::runtime::interpreter::{interpret, RuntimeException, LoxControlFlow};
+use crate::runtime::environment::Env;
 use std::rc::Rc;
 use crate::source_ref::{Source, SourceRef};
-use crate::parser::types::{Callable};
-use crate::scanner::Literal;
+use crate::runtime::{Callable, Value};
 use std::time::{SystemTime, UNIX_EPOCH};
 use crate::resolver::{resolve};
 
@@ -31,12 +28,12 @@ impl Callable for ClockRuntimeFunc {
     fn arity(&self) -> u8 {
         0
     }
-    fn call(&self, _args: Vec<Literal>, context: SourceRef) -> Result<Literal, RuntimeException> {
+    fn call(&self, _args: Vec<Value>, context: SourceRef) -> Result<Value, RuntimeException> {
         let t = match SystemTime::now().duration_since(UNIX_EPOCH) {
             Ok(t) => t,
             Err(_) => return Err(RuntimeException::new(format!("Unable to determine system time."), context))
         };
-        Ok(Literal::NUMBER(t.as_secs_f64() * 1000.0))
+        Ok(Value::NUMBER(t.as_secs_f64() * 1000.0))
     }
     fn name(&self) -> &str { "clock" }
 }
@@ -51,7 +48,7 @@ struct Lox {
 impl Lox {
     fn new() -> Lox {
         let mut globals = Env::new(None);
-        let clock = Literal::FUNC(Rc::new(ClockRuntimeFunc {} ));
+        let clock = Value::FUNC(Rc::new(ClockRuntimeFunc {} ));
         globals.declare("clock", &clock);
 
         return Lox {

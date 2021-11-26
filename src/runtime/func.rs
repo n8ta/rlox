@@ -1,33 +1,16 @@
-use crate::interpreter::{LoxControlFlow, interpret, RuntimeException};
-use crate::source_ref::SourceRef;
-use crate::scanner::Literal;
-use crate::environment::Env;
-use crate::parser::types::{Stmt, Callable};
 use std::rc::Rc;
-
-#[derive(Clone, Debug, PartialEq)]
-/// Parser Representation of a Func
-pub struct ParserFunc {
-    pub name: String,
-    pub args: Vec<(String, SourceRef)>,
-    pub body: Vec<Stmt>,
-    pub name_context: SourceRef,
-}
-
-impl ParserFunc {
-    pub fn new(name: String, args: Vec<(String, SourceRef)>, body: Vec<Stmt>, name_context: SourceRef) -> ParserFunc {
-        ParserFunc { name, args, body, name_context }
-    }
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-}
+use crate::{Callable, SourceRef};
+use crate::parser::ParserFunc;
+use crate::runtime::environment::Env;
+use crate::runtime::interpreter::{interpret, LoxControlFlow, RuntimeException};
+use crate::runtime::value::Value;
 
 /// Runtime Representation of a Func
 #[derive(Clone, Debug)]
 pub struct Func {
     inner: Rc<FuncInner>
 }
+
 
 impl Func {
     pub(crate) fn new(func: ParserFunc, env: Env, globals: Env) -> Func {
@@ -46,7 +29,7 @@ impl Callable for Func {
     fn arity(&self) -> u8 {
         self.inner.func.args.len() as u8
     }
-    fn call(&self, args: Vec<Literal>, _callsite: SourceRef) -> Result<Literal, RuntimeException> {
+    fn call(&self, args: Vec<Value>, _callsite: SourceRef) -> Result<Value, RuntimeException> {
         let mut new_env = Env::new(Some(self.inner.env.clone()));
         for i in 0..self.inner.func.args.len() {
             new_env.declare(&self.inner.func.args[i].0.clone(), &args[i]);

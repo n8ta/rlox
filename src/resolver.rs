@@ -1,8 +1,8 @@
-use crate::parser::types::{Stmt, ExprTy, Expr};
+use crate::parser::{ParserFunc, Stmt, ExprTy, Expr};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
-use crate::func::ParserFunc;
-use crate::source_ref::{Source, SourceRef};
+use crate::source_ref::{SourceRef};
+use crate::{Callable, Source};
 
 pub type ResolverResult = Result<(), ResolverError>;
 
@@ -113,6 +113,13 @@ impl Resolver {
                     self.resolve_expr(expr)?;
                 }
             }
+            Stmt::Class(class) => {
+                self.declare(class.name().clone());
+                for m in class.inner.methods.borrow_mut().iter_mut() {
+                    self.resolve_func(m)?;
+                }
+                self.define(class.name());
+            }
         }
         Ok(())
     }
@@ -166,6 +173,14 @@ impl Resolver {
                 self.resolve_expr(left)?;
                 self.resolve_expr(right)?;
             }
+            (Expr::Get(expr, getter_name), _) => {
+                self.resolve_expr(expr)?;
+            }
+            (Expr::Set(left, _field, right), _) => {
+                self.resolve_expr(left)?;
+                self.resolve_expr(right)?;
+            }
+
         }
         Ok(())
     }
@@ -175,7 +190,7 @@ impl Resolver {
 fn resolver_basic() {
     use std::rc::Rc;
     use crate::scanner::scanner;
-    use crate::parser::parsing::parse;
+    use crate::parser::parse;
     // var name = true;
     // print name;
     let src = "fun test() {\n
@@ -205,7 +220,7 @@ fn resolver_basic() {
 fn resolver_recursive() {
     use std::rc::Rc;
     use crate::scanner::scanner;
-    use crate::parser::parsing::parse;
+    use crate::parser::parse;
     let src = "fun rec() {\nprint rec();\n}".to_string();
     let src = Rc::new(Source::new(src));
     let mut stmts: Vec<Stmt> = parse(scanner(src.clone()).unwrap(), src.clone()).unwrap();

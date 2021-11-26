@@ -1,12 +1,14 @@
-use crate::parser::types::{ExprTy, Expr, UnaryOp, Stmt, LogicalOp};
-use crate::scanner::{Literal};
-use crate::parser::types::BinOp::{EQUAL_EQUAL, BANG_EQUAL, PLUS, SLASH, MINUS, MULT, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, AND, OR};
+use crate::parser::{ExprTy, Expr, UnaryOp, Stmt, LogicalOp};
+use crate::parser::BinOp::{EQUAL_EQUAL, BANG_EQUAL, PLUS, SLASH, MINUS, MULT, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, AND, OR};
 use crate::source_ref::SourceRef;
-use crate::environment::Env;
-use crate::scanner::Literal::{NIL};
+use crate::runtime::environment::Env;
 use std::rc::Rc;
-use crate::func::Func;
+use crate::runtime::{func, is_equal};
 use std::fmt::{Debug};
+use crate::runtime::func::Func;
+use crate::runtime::Value;
+use crate::Value::NIL;
+use crate::Callable;
 
 #[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord)]
 pub struct RuntimeException {
@@ -22,7 +24,7 @@ impl RuntimeException {
 
 pub enum LoxControlFlow {
     CFRuntime(RuntimeException),
-    CFReturn(Literal, SourceRef)
+    CFReturn(Value, SourceRef)
 }
 
 impl From<RuntimeException> for LoxControlFlow {
@@ -31,23 +33,13 @@ impl From<RuntimeException> for LoxControlFlow {
     }
 }
 
-type InterpreterResult = Result<Literal, LoxControlFlow>;
+type InterpreterResult = Result<Value, LoxControlFlow>;
 
-fn is_num(lit: Literal, context: &SourceRef) -> Result<f64, RuntimeException> {
-    if let Literal::NUMBER(num) = lit {
+fn is_num(lit: Value, context: &SourceRef) -> Result<f64, RuntimeException> {
+    if let Value::NUMBER(num) = lit {
         Ok(num)
     } else {
         Err(RuntimeException::new(format!("Expected a number found {:?}", lit), context.clone()))
-    }
-}
-
-pub fn is_equal(left: &Literal, right: &Literal, context: &SourceRef) -> Result<bool, RuntimeException> {
-    match (left, right) {
-        (Literal::STRING(left), Literal::STRING(right)) => Ok(left == right),
-        (Literal::NUMBER(left), Literal::NUMBER(right)) => Ok(left == right),
-        (Literal::BOOL(left), Literal::BOOL(right)) => Ok(left == right),
-        (Literal::NIL, Literal::NIL) => Ok(true),
-        _ => Err(RuntimeException::new(format!("Cannot compare {} and {}", left.tname(), right.tname()), context.clone()))
     }
 }
 
@@ -74,6 +66,16 @@ impl Interpreter {
     fn interpret(&mut self, stmts: &Vec<Stmt>) -> InterpreterResult {
         for stmt in stmts.iter() {
             match stmt {
+                Stmt::Class(class) => {
+                    self.env.declare(class.name(), &Value::NIL);
+                    let class_runtime = Value::CLASS(class.clone());
+                    let mut rt_methods = class.inner.runtime_methods.borrow_mut();
+                    for method in class.inner.methods.borrow().iter() {
+                        let func = Func::new(method.clone(), self.env.clone(), self.globals.clone());
+                        rt_methods.insert(func.name().to_string(), Value::FUNC(Rc::new(func)));
+                    }
+                    self.env.assign(class.name(), &class_runtime, &class.context())?;
+                }
                 Stmt::Block(block_stmts) => {
                     let parent = self.env.clone();
                     let new_scope = Env::new(Some(parent.clone()));
@@ -115,13 +117,13 @@ impl Interpreter {
                 }
                 Stmt::Function(func) => {
                     self.env.declare(func.name().clone(),
-                                     &Literal::FUNC(Rc::new(
+                                     &Value::FUNC(Rc::new(
                                          Func::new(func.clone(), self.env.clone(), self.globals.clone())
                                      )));
                 }
                 Stmt::Return(expr, context) => {
                     let val = match expr {
-                        None => Literal::NIL,
+                        None => Value::NIL,
                         Some(expr) => self.execute_expr(expr)?,
                     };
                     return Err(LoxControlFlow::CFReturn(val, context.clone()))
@@ -144,30 +146,30 @@ impl Interpreter {
                 let right = self.execute_expr(&right)?;
                 Ok(match op {
                     // NUM, STRING, BOOL, NIL
-                    EQUAL_EQUAL => Literal::BOOL(is_equal(&left, &right, &expr.context)?),
-                    BANG_EQUAL => Literal::BOOL(!is_equal(&left, &right, &expr.context)?),
+                    EQUAL_EQUAL => Value::BOOL(is_equal(&left, &right, &expr.context)?),
+                    BANG_EQUAL => Value::BOOL(!is_equal(&left, &right, &expr.context)?),
 
                     // NUM
-                    LESS => Literal::BOOL(is_num(left, &context)? < is_num(right, &context)?),
-                    LESS_EQUAL => Literal::BOOL(is_num(left, &context)? <= is_num(right, &context)?),
-                    SLASH => Literal::NUMBER(is_num(left, &context)? / is_num(right, &context)?),
-                    MULT => Literal::NUMBER(is_num(left, &context)? * is_num(right, &context)?),
-                    MINUS => Literal::NUMBER(is_num(left, &context)? - is_num(right, &context)?),
-                    GREATER => Literal::BOOL(is_num(left, &context)? > is_num(right, &context)?),
-                    GREATER_EQUAL => Literal::BOOL(is_num(left, &context)? >= is_num(right, &context)?),
+                    LESS => Value::BOOL(is_num(left, &context)? < is_num(right, &context)?),
+                    LESS_EQUAL => Value::BOOL(is_num(left, &context)? <= is_num(right, &context)?),
+                    SLASH => Value::NUMBER(is_num(left, &context)? / is_num(right, &context)?),
+                    MULT => Value::NUMBER(is_num(left, &context)? * is_num(right, &context)?),
+                    MINUS => Value::NUMBER(is_num(left, &context)? - is_num(right, &context)?),
+                    GREATER => Value::BOOL(is_num(left, &context)? > is_num(right, &context)?),
+                    GREATER_EQUAL => Value::BOOL(is_num(left, &context)? >= is_num(right, &context)?),
 
                     // STRING OR NUM
                     PLUS => {
                         match (&left, &right) {
-                            (Literal::STRING(linner), Literal::STRING(rinner)) => Literal::STRING(format!("{}{}", linner, rinner)),
-                            (Literal::NUMBER(linner), Literal::NUMBER(rinner)) => Literal::NUMBER(linner + rinner),
+                            (Value::STRING(linner), Value::STRING(rinner)) => Value::STRING(format!("{}{}", linner, rinner)),
+                            (Value::NUMBER(linner), Value::NUMBER(rinner)) => Value::NUMBER(linner + rinner),
                             _ => return self.err(format!("Cannot + {} and {}", left.tname(), right.tname()), expr.context.clone()),
                         }
                     }
 
                     // BOOL ONLY
-                    AND => Literal::BOOL(left.truthy() && right.truthy()),
-                    OR => Literal::BOOL(left.truthy() || right.truthy()),
+                    AND => Value::BOOL(left.truthy() && right.truthy()),
+                    OR => Value::BOOL(left.truthy() || right.truthy()),
                 })
             }
             Expr::Grouping(inner) => self.execute_expr(&inner),
@@ -175,15 +177,15 @@ impl Interpreter {
             Expr::Unary(op, inner) => {
                 match op {
                     UnaryOp::BANG => {
-                        if let Expr::Literal(Literal::BOOL(bool_l)) = inner.expr {
-                            Ok(Literal::BOOL(!bool_l))
+                        if let Expr::Literal(Value::BOOL(bool_l)) = inner.expr {
+                            Ok(Value::BOOL(!bool_l))
                         } else {
                             Err(RuntimeException::new(format!("Cannot apply ! to a non-bool {:?}", inner), expr.context.clone()).into())
                         }
                     }
                     UnaryOp::MINUS => {
-                        if let Expr::Literal(Literal::NUMBER(num)) = inner.expr {
-                            Ok(Literal::NUMBER(-num))
+                        if let Expr::Literal(Value::NUMBER(num)) = inner.expr {
+                            Ok(Value::NUMBER(-num))
                         } else {
                             Err(RuntimeException::new(format!("Cannot apply - to a non-number {:?}", inner), expr.context.clone()).into())
                         }
@@ -200,7 +202,7 @@ impl Interpreter {
             Expr::Assign(var, new_val) => {
                 let value = self.execute_expr(&new_val)?;
                 self.env.assign(&var, &value, &expr.context)?;
-                Ok(Literal::NIL)
+                Ok(Value::NIL)
             }
             Expr::Logical(left, op, right) => {
                 let left = self.execute_expr(&left)?;
@@ -217,16 +219,38 @@ impl Interpreter {
                 for arg in args.iter() {
                     evaluated_args.push(self.execute_expr(arg)?)
                 }
-                if let Literal::FUNC(func) = func {
+                if let Value::FUNC(func) = func {
                     Ok(func.call(evaluated_args, callee.context.clone())?)
+                } else if let Value::CLASS(class) = func {
+                    Ok(class.call(evaluated_args, callee.context.clone())?)
                 } else {
-                    Err(RuntimeException::new(format!("Cannot call a {:?}", func), callee.context.clone()).into())
+                    Err(RuntimeException::new(format!("Cannot call a {}", func.tname()), callee.context.clone()).into())
+                }
+            }
+            Expr::Get(expr, getter_name) => {
+                let obj = self.execute_expr(expr)?;
+                if let Value::INSTANCE(inst) = obj {
+                    inst.get(getter_name, &expr.context).map_err(|e| e.into())
+                } else {
+                    Err(RuntimeException::new(format!("Cannot use the class.get_property syntax on a non class instance"), expr.context.clone()).into())
+                }
+            }
+            Expr::Set(left, field, right) => {
+                let lhs = self.execute_expr(left)?;
+                if let Value::INSTANCE(mut inst) = lhs {
+                    let rhs = self.execute_expr(right)?;
+                    inst.set(field, rhs.clone());
+                    Ok(rhs)
+                } else {
+                    Err(LoxControlFlow::CFRuntime(RuntimeException::new(
+                        format!("Cannot assign field {} to a {}", field, lhs.tname()),
+                        left.context.merge(&right.context))))
                 }
             }
         }
     }
 
-    fn lookup_variable(&self, name: &str, expr: ExprTy) -> Result<Literal, RuntimeException> {
+    fn lookup_variable(&self, name: &str, expr: ExprTy) -> Result<Value, RuntimeException> {
         if let Some(dist) = expr.scope {
             self.env.get_at(dist, name, &expr.context)
         } else {

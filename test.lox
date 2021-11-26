@@ -1,7 +1,13 @@
-fun rec() {
-    print "pre";
-    print rec();
-    print "post";
+fun makeCounter() {
+  var i = 0;
+  fun count() {
+    print i;
+    print j;
+  }
+  var j = 0;
+  return count;
 }
 
-rec();
+var counter = makeCounter();
+counter(); // 0
+counter(); // 0

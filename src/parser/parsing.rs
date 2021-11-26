@@ -1,9 +1,10 @@
-use crate::scanner::{Token, TokenInContext, Literal};
+use crate::scanner::{Token, TokenInContext};
 use crate::scanner::Token::{GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, SLASH, MULT, LITERAL, LPAREN, RPAREN, BANG_EQUAL, EQUAL_EQUAL, VAR, SEMICOLON, IDENTIFIER, LBRACE};
 use crate::source_ref::{Source, SourceRef};
 use std::rc::Rc;
 use crate::parser::types::{Tokens, Stmt, ParserError, ExprTy, LogicalOp, ExprInContext, Expr, UnaryOp, ExprResult, BinOp};
-use crate::func::{ParserFunc};
+use crate::parser::{ParserFunc, Class};
+use crate::runtime::Value;
 
 pub fn parse(tokens: Tokens, source: Rc<Source>) -> Result<Vec<Stmt>, ParserError> {
     let mut parser: Parser = Parser::new(tokens, source);
@@ -117,8 +118,10 @@ impl Parser {
                     Err(err)
                 }
             }
+        } else if self.matches(vec![Token::CLASS]) {
+            self.class()
         } else if self.matches(vec![Token::FUN]) {
-            self.function()
+            self.function().and_then(|f| Ok(Stmt::Function(f)))
         } else {
             match self.statement() {
                 Ok(stmt) => Ok(stmt),
@@ -130,7 +133,23 @@ impl Parser {
         }
     }
 
-    fn function(&mut self) -> Result<Stmt, ParserError> {
+    fn class(&mut self) -> Result<Stmt, ParserError> {
+        let name_in_context = self.consume(Token::IDENTIFIER(format!("")), "Expected a class name")?;
+        let name = if let Token::IDENTIFIER(str) = name_in_context.token {
+            str
+        } else {
+            panic!("Compiler bug");
+        };
+        self.consume(Token::LBRACE, "Expected a '{' before class body")?;
+        let mut methods = vec![];
+        while (!self.check(Token::RBRACE) && !self.is_at_end()) {
+            methods.push(self.function()?);
+        }
+        self.consume(Token::RBRACE, "Expected a '}' after class body")?;
+        Ok(Stmt::Class(Class::new(name, name_in_context.context, methods)))
+    }
+
+    fn function(&mut self) -> Result<ParserFunc, ParserError> {
         let name_in_context = self.consume(Token::IDENTIFIER(format!("")), "Expected a function name")?;
         let name = if let Token::IDENTIFIER(str) = name_in_context.token { str } else {
             return Err(self.err(format!("Expected a function name")));
@@ -167,8 +186,7 @@ impl Parser {
             } else {
                 panic!("block() didn't return a block");
             };
-        Ok(Stmt::Function(ParserFunc::new(name, params, body, name_in_context.context.clone())))
-
+        Ok(ParserFunc::new(name, params, body, name_in_context.context.clone()))
     }
 
     fn variable_declaration(&mut self) -> Result<Stmt, ParserError> {
@@ -218,8 +236,10 @@ impl Parser {
             if let Expr::Variable(lit) = expr.expr {
                 return Ok(mk_expr(Expr::Assign(lit, value.clone()),
                                   expr.context.merge(&value.context)));
+            } else if let Expr::Get(get_expr, field) = expr.expr {
+                return Ok(mk_expr(Expr::Set(get_expr, field, value), expr.context));
             } else {
-                return Err(self.err(format!("Invalid assignment target")));
+                return Err(self.err(format!("Invalid assignment target {:?}", expr.expr)));
             }
         }
         Ok(expr)
@@ -303,7 +323,7 @@ impl Parser {
         }
         let src = self.tokens[self.current].context.clone();
         if condition.is_none() {
-            condition = Some(Box::new(ExprInContext::new(Expr::Literal(Literal::BOOL(true)), src)));
+            condition = Some(Box::new(ExprInContext::new(Expr::Literal(Value::BOOL(true)), src)));
         }
         body = Stmt::While(condition.unwrap(), Box::new(body));
         if let Some(init) = init {
@@ -394,6 +414,13 @@ impl Parser {
         loop {
             if self.matches(vec![Token::LPAREN]) {
                 expr = self.finish_call(expr)?;
+            } else if (self.matches(vec![Token::DOT])) {
+                let ident = self.consume(Token::IDENTIFIER(format!("")), "Expected an identifier after a '.'")?;
+                if let Token::IDENTIFIER(name) = &ident.token {
+                    expr = Box::new(ExprInContext::new(Expr::Get(expr, name.clone()), ident.context));
+                } else {
+                    panic!("Compiler error");
+                }
             } else {
                 break;
             }
@@ -421,22 +448,22 @@ impl Parser {
     }
 
     fn primary(&mut self) -> ExprResult {
-        if self.matches(vec![LITERAL(Literal::BOOL(false))]) {
-            if let LITERAL(Literal::BOOL(b)) = self.previous().unwrap().token {
-                return Ok(mk_expr(Expr::Literal(Literal::BOOL(b)), self.previous().unwrap().context));
+        if self.matches(vec![LITERAL(Value::BOOL(false))]) {
+            if let LITERAL(Value::BOOL(b)) = self.previous().unwrap().token {
+                return Ok(mk_expr(Expr::Literal(Value::BOOL(b)), self.previous().unwrap().context));
             }
             panic!("This path shouldn't happen. I need a better matches() func");
         }
-        if self.matches(vec![LITERAL(Literal::BOOL(true))]) { return Ok(mk_expr(Expr::Literal(Literal::BOOL(true)), self.previous().unwrap().context)); }
-        if self.matches(vec![LITERAL(Literal::NIL)]) { return Ok(mk_expr(Expr::Literal(Literal::NIL), self.previous().unwrap().context)); }
-        if self.matches(vec![LITERAL(Literal::NUMBER(1.0))]) {
+        if self.matches(vec![LITERAL(Value::BOOL(true))]) { return Ok(mk_expr(Expr::Literal(Value::BOOL(true)), self.previous().unwrap().context)); }
+        if self.matches(vec![LITERAL(Value::NIL)]) { return Ok(mk_expr(Expr::Literal(Value::NIL), self.previous().unwrap().context)); }
+        if self.matches(vec![LITERAL(Value::NUMBER(1.0))]) {
             // These ifs should always be true (based on the match above). This is an awkward intersection of javas
             // (language used in the book) Object base class and rust's type system.
             // I couldn't find a good way to write a generic match that return a specific variant
             // of the Token enum to avoid the second type check. (Enum variants aren't types, very sad)
             if let Token::LITERAL(lit) = self.previous().unwrap().token {
-                if let Literal::NUMBER(num) = lit {
-                    return Ok(mk_expr(Expr::Literal(Literal::NUMBER(num)), self.previous().unwrap().context));
+                if let Value::NUMBER(num) = lit {
+                    return Ok(mk_expr(Expr::Literal(Value::NUMBER(num)), self.previous().unwrap().context));
                 }
             }
             panic!("This path shouldn't happen!");
@@ -446,11 +473,11 @@ impl Parser {
             self.consume(RPAREN, "Expected ')' after expression.")?;
             return Ok(mk_expr(Expr::Grouping(expr), self.previous().unwrap().context));
         }
-        if self.matches(vec![LITERAL(Literal::STRING("test".to_string()))]) {
+        if self.matches(vec![LITERAL(Value::STRING("test".to_string()))]) {
             let str = self.previous().expect("Expected there to be a previous token b/c match passed");
             if let Token::LITERAL(lit) = str.token {
-                if let Literal::STRING(str) = lit {
-                    return Ok(mk_expr(Expr::Literal(Literal::STRING(str)), self.previous().unwrap().context));
+                if let Value::STRING(str) = lit {
+                    return Ok(mk_expr(Expr::Literal(Value::STRING(str)), self.previous().unwrap().context));
                 }
             }
             panic!("Also shouldn't happen. something wrong with matches function");
