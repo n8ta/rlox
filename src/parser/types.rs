@@ -46,7 +46,7 @@ impl ExprInContext {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 pub enum Stmt {
     Expr(ExprTy),
     Block(Vec<Stmt>),
@@ -77,6 +77,7 @@ pub enum Expr {
     Variable(String),
     Assign(String, ExprTy),
     Logical(ExprTy, LogicalOp, ExprTy),
+    This,
 }
 
 #[allow(non_camel_case_types)]

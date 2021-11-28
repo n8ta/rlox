@@ -18,7 +18,7 @@ pub struct ClassInner {
     name: String,
     context: SourceRef,
     pub methods: RefCell<Vec<ParserFunc>>,
-    pub runtime_methods: RefCell<HashMap<String, Value>>,
+    pub runtime_methods: RefCell<HashMap<String, Func>>,
 }
 
 impl Class {

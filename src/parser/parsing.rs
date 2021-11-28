@@ -474,13 +474,16 @@ impl Parser {
             return Ok(mk_expr(Expr::Grouping(expr), self.previous().unwrap().context));
         }
         if self.matches(vec![LITERAL(Value::STRING("test".to_string()))]) {
-            let str = self.previous().expect("Expected there to be a previous token b/c match passed");
+            let str = self.previous().expect("Compiler error");
             if let Token::LITERAL(lit) = str.token {
                 if let Value::STRING(str) = lit {
                     return Ok(mk_expr(Expr::Literal(Value::STRING(str)), self.previous().unwrap().context));
                 }
             }
             panic!("Also shouldn't happen. something wrong with matches function");
+        }
+        if self.matches(vec![Token::THIS]) {
+            return Ok(mk_expr(Expr::This, self.previous().unwrap().context));
         }
 
         if self.matches(vec![Token::IDENTIFIER(format!(""))]) {

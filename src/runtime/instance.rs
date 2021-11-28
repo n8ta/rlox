@@ -20,6 +20,13 @@ impl Instance {
         self.class.name()
     }
 
+    pub fn find_methods(&self, method: &str, context: &SourceRef) -> Value {
+        match self.class.inner.runtime_methods.borrow_mut().get(method) {
+            None => Value::NIL,
+            Some(func)  => Value::FUNC(Rc::new(func.clone())),
+        }
+    }
+
     pub fn get(&self, field: &str, context: &SourceRef) -> Result<Value, RuntimeException> {
         let fields = self.fields.borrow_mut();
         let methods = self.class.inner.runtime_methods.borrow_mut();
@@ -28,12 +35,16 @@ impl Instance {
             None => {
                 match methods.get(field) {
                     None => Err(RuntimeException::new(
-                        format!("Unable to find field {} on {} it has fields \"{}\"",
+                        format!("Unable to find '{}' on {} it has fields \"{}\" and methods \"{}\"",
                                 field,
                                 self.class.name(),
-                                fields.iter().map(|(a, b)| a.to_string()).collect::<Vec<String>>().join(", ")),
-                        context.clone())),
-                    Some(func) => Ok(func.clone()),
+                                fields.iter().map(|(a, b)| a.to_string()).collect::<Vec<String>>().join(", "),
+                                methods.iter().map(|(a, b)| a.to_string()).collect::<Vec<String>>().join(", ")),
+                                context.clone())),
+                    Some(func) => {
+                        let bound_method = func.clone().bind(&self);
+                        Ok(Value::FUNC(Rc::new(bound_method)))
+                    }
                 }
             }
             Some(value) => Ok(value.clone())

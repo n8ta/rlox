@@ -9,6 +9,7 @@ use crate::runtime::func::Func;
 use crate::runtime::Value;
 use crate::Value::NIL;
 use crate::Callable;
+use crate::LoxControlFlow::CFRuntime;
 
 #[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord)]
 pub struct RuntimeException {
@@ -53,7 +54,6 @@ pub struct Interpreter {
     pub globals: Env,
 }
 
-
 impl Into<InterpreterResult> for RuntimeException {
     fn into(self) -> InterpreterResult {
         Err(LoxControlFlow::CFRuntime(self))
@@ -72,7 +72,7 @@ impl Interpreter {
                     let mut rt_methods = class.inner.runtime_methods.borrow_mut();
                     for method in class.inner.methods.borrow().iter() {
                         let func = Func::new(method.clone(), self.env.clone(), self.globals.clone());
-                        rt_methods.insert(func.name().to_string(), Value::FUNC(Rc::new(func)));
+                        rt_methods.insert(func.name().to_string(), func);
                     }
                     self.env.assign(class.name(), &class_runtime, &class.context())?;
                 }
@@ -139,6 +139,9 @@ impl Interpreter {
 
     fn execute_expr(&mut self, expr: &ExprTy) -> InterpreterResult {
         match &expr.expr {
+            Expr::This => {
+                self.lookup_variable("this", expr.scope, &expr.context)
+            }
             Expr::Binary(left, op, right) => {
                 let context = left.context.merge(&right.context);
 
@@ -250,11 +253,12 @@ impl Interpreter {
         }
     }
 
-    fn lookup_variable(&self, name: &str, expr: ExprTy) -> Result<Value, RuntimeException> {
-        if let Some(dist) = expr.scope {
-            self.env.get_at(dist, name, &expr.context)
+    fn lookup_variable(&self, name: &str, scope: Option<usize>, context: &SourceRef) -> InterpreterResult {
+        let res = if let Some(dist) = scope {
+            self.env.get_at(dist, name, context)
         } else {
-            self.globals.fetch(name, &expr.context)
-        }
+            self.globals.fetch(name, context).into()
+        };
+        res.or_else(|e| InterpreterResult::Err(CFRuntime(e)))
     }
 }
