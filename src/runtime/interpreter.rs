@@ -25,7 +25,7 @@ impl RuntimeException {
 
 pub enum LoxControlFlow {
     CFRuntime(RuntimeException),
-    CFReturn(Value, SourceRef)
+    CFReturn(Value, SourceRef),
 }
 
 impl From<RuntimeException> for LoxControlFlow {
@@ -44,7 +44,7 @@ fn is_num(lit: Value, context: &SourceRef) -> Result<f64, RuntimeException> {
     }
 }
 
-pub fn interpret(stmts: &Vec<Stmt>, env: Env, globals: Env) -> InterpreterResult {
+pub fn interpret(stmts: &Stmt, env: Env, globals: Env) -> InterpreterResult {
     let mut interp = Interpreter::new(env, globals);
     interp.interpret(stmts)
 }
@@ -63,71 +63,71 @@ impl Into<InterpreterResult> for RuntimeException {
 impl Interpreter {
     fn new(env: Env, globals: Env) -> Interpreter { Interpreter { env, globals } }
 
-    fn interpret(&mut self, stmts: &Vec<Stmt>) -> InterpreterResult {
-        for stmt in stmts.iter() {
-            match stmt {
-                Stmt::Class(class) => {
-                    self.env.declare(class.name(), &Value::NIL);
-                    let class_runtime = Value::CLASS(class.clone());
-                    let mut rt_methods = class.inner.runtime_methods.borrow_mut();
-                    for method in class.inner.methods.borrow().iter() {
-                        let func = Func::new(method.clone(), self.env.clone(), self.globals.clone());
-                        rt_methods.insert(func.name().to_string(), func);
+    fn interpret(&mut self, stmt: &Stmt) -> InterpreterResult {
+        match stmt {
+            Stmt::Class(class) => {
+                self.env.declare(class.name(), &Value::NIL);
+                let class_runtime = Value::CLASS(class.clone());
+                let mut rt_methods = class.inner.runtime_methods.borrow_mut();
+                for method in class.inner.methods.borrow().iter() {
+                    let func = Func::new(method.clone(), self.env.clone(), self.globals.clone());
+                    rt_methods.insert(func.name().to_string(), func);
+                }
+                self.env.assign(class.name(), &class_runtime, &class.context())?;
+            }
+            Stmt::Block(block_stmts) => {
+                let parent = self.env.clone();
+                let new_scope = Env::new(Some(parent.clone()));
+                self.env = new_scope;
+                let mut res: InterpreterResult = Ok(Value::NIL);
+                for stmt in block_stmts.iter() {
+                    res = Ok(self.interpret(stmt)?);
+                }
+                self.env = parent;
+                res?;
+            }
+            Stmt::Expr(expr) => {
+                self.execute_expr(&expr)?;
+            }
+            Stmt::Print(val) => {
+                println!("{}", self.execute_expr(&val)?);
+            }
+            Stmt::Variable(name, value) => {
+                match value {
+                    None => {
+                        self.env.declare(&name, &NIL);
                     }
-                    self.env.assign(class.name(), &class_runtime, &class.context())?;
-                }
-                Stmt::Block(block_stmts) => {
-                    let parent = self.env.clone();
-                    let new_scope = Env::new(Some(parent.clone()));
-                    self.env = new_scope;
-                    let res = self.interpret(block_stmts);
-                    self.env = parent;
-                    res?;
-                }
-                Stmt::Expr(expr) => {
-                    self.execute_expr(&expr)?;
-                }
-                Stmt::Print(val) => {
-                    println!("{}", self.execute_expr(&val)?);
-                }
-                Stmt::Variable(name, value) => {
-                    match value {
-                        None => {
-                            self.env.declare(&name, &NIL);
-                        }
-                        Some(lit) => {
-                            let value = &self.execute_expr(&lit)?;
-                            self.env.declare(&name, value);
-                        }
-                    };
-                }
-                Stmt::If(test, then_branch, else_branch) => {
-                    let res = self.execute_expr(&test)?;
-                    if res.truthy() {
-                        self.interpret(then_branch)?;
-                    } else if let Some(else_branch) = else_branch {
-                        self.interpret(else_branch)?;
+                    Some(lit) => {
+                        let value = &self.execute_expr(&lit)?;
+                        self.env.declare(&name, value);
                     }
+                };
+            }
+            Stmt::If(test, then_branch, else_branch) => {
+                let res = self.execute_expr(&test)?;
+                if res.truthy() {
+                    self.interpret(then_branch)?;
+                } else if let Some(else_branch) = else_branch {
+                    self.interpret(else_branch)?;
                 }
-                Stmt::While(test, body) => {
-                    while self.execute_expr(&test)?.truthy() {
-                        let b = *body.clone();
-                        self.interpret(&vec![b])?;
-                    }
+            }
+            Stmt::While(test, body) => {
+                while self.execute_expr(&test)?.truthy() {
+                    self.interpret(&*body)?;
                 }
-                Stmt::Function(func) => {
-                    self.env.declare(func.name().clone(),
-                                     &Value::FUNC(Rc::new(
-                                         Func::new(func.clone(), self.env.clone(), self.globals.clone())
-                                     )));
-                }
-                Stmt::Return(expr, context) => {
-                    let val = match expr {
-                        None => Value::NIL,
-                        Some(expr) => self.execute_expr(expr)?,
-                    };
-                    return Err(LoxControlFlow::CFReturn(val, context.clone()))
-                }
+            }
+            Stmt::Function(func) => {
+                self.env.declare(func.name().clone(),
+                                 &Value::FUNC(Rc::new(
+                                     Func::new(func.clone(), self.env.clone(), self.globals.clone())
+                                 )));
+            }
+            Stmt::Return(expr, context) => {
+                let val = match expr {
+                    None => Value::NIL,
+                    Some(expr) => self.execute_expr(expr)?,
+                };
+                return Err(LoxControlFlow::CFReturn(val, context.clone()));
             }
         }
         Ok(NIL)
@@ -199,7 +199,7 @@ impl Interpreter {
                 if let Some(distance) = expr.scope {
                     self.env.get_at(distance, &var, &expr.context).or_else(|r| r.into())
                 } else {
-                    self.globals.fetch( &var, &expr.context).or_else(|r| r.into())
+                    self.globals.fetch(&var, &expr.context).or_else(|r| r.into())
                 }
             }
             Expr::Assign(var, new_val) => {

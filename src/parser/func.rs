@@ -14,17 +14,17 @@ pub struct ParserFunc {
 pub struct ParserFuncInner {
     pub name: String,
     pub args: Vec<(String, SourceRef)>,
-    pub body: RefCell<Vec<Stmt>>,
+    pub body: RefCell<Stmt>,
     pub name_context: SourceRef,
 }
 impl ParserFuncInner {
-    fn new(name: String, args: Vec<(String, SourceRef)>, body: Vec<Stmt>, name_context: SourceRef) -> ParserFuncInner {
+    fn new(name: String, args: Vec<(String, SourceRef)>, body: Stmt, name_context: SourceRef) -> ParserFuncInner {
         ParserFuncInner { name, args, body: RefCell::new(body), name_context }
     }
 }
 
 impl ParserFunc {
-    pub fn new(name: String, args: Vec<(String, SourceRef)>, body: Vec<Stmt>, name_context: SourceRef) -> ParserFunc {
+    pub fn new(name: String, args: Vec<(String, SourceRef)>, body: Stmt, name_context: SourceRef) -> ParserFunc {
         ParserFunc { inner: Rc::new(ParserFuncInner::new(name, args, body, name_context)) }
     }
     pub fn name(&self) -> &str {

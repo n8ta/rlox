@@ -31,7 +31,7 @@ impl ResolverError {
     pub fn new(message: &str, source: &SourceRef) -> ResolverError { ResolverError { message: message.to_string(), source: source.clone() } }
 }
 
-pub fn resolve(prog: &mut Vec<Stmt>) -> ResolverResult {
+pub fn resolve(prog: &mut Stmt) -> ResolverResult {
     let mut res = Resolver::new();
     res.resolve(prog)
 }
@@ -45,10 +45,8 @@ struct Resolver {
 impl Resolver {
     pub fn new() -> Resolver { Resolver { scopes: vec![], currentClass: ClassType::None } }
 
-    pub fn resolve(&mut self, program: &mut Vec<Stmt>) -> ResolverResult {
-        for stmt in program {
-            self.resolve_stmt(stmt)?;
-        }
+    pub fn resolve(&mut self, program: &mut Stmt) -> ResolverResult {
+        self.resolve_stmt(program)?;
         Ok(())
     }
 
@@ -86,7 +84,9 @@ impl Resolver {
             }
             Stmt::Block(stmts) => {
                 self.begin_scope();
-                self.resolve(stmts)?;
+                for stmt in stmts.iter_mut() {
+                    self.resolve(stmt)?;
+                }
                 self.end_scope();
             }
             Stmt::Print(expr) => {

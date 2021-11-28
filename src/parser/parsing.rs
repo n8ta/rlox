@@ -6,9 +6,10 @@ use crate::parser::types::{Tokens, Stmt, ParserError, ExprTy, LogicalOp, ExprInC
 use crate::parser::{ParserFunc, Class};
 use crate::runtime::Value;
 
-pub fn parse(tokens: Tokens, source: Rc<Source>) -> Result<Vec<Stmt>, ParserError> {
+pub fn parse(tokens: Tokens, source: Rc<Source>) -> Result<Stmt, ParserError> {
     let mut parser: Parser = Parser::new(tokens, source);
-    parser.parse()
+    let v = parser.parse()?;
+    Ok(Stmt::Block(Box::new(v)))
 }
 
 
@@ -180,13 +181,14 @@ impl Parser {
 
         self.consume(RPAREN, "Expected a ')' after function parameters")?;
         self.consume(LBRACE, "Expected a '{' after a function declaration")?;
-        let body: Vec<Stmt> =
+        let body =
             if let Stmt::Block(blk) = self.block()? {
-                blk
+                *blk
             } else {
                 panic!("block() didn't return a block");
             };
-        Ok(ParserFunc::new(name, params, body, name_in_context.context.clone()))
+
+        Ok(ParserFunc::new(name, params, Stmt::Block(Box::new(body)), name_in_context.context.clone()))
     }
 
     fn variable_declaration(&mut self) -> Result<Stmt, ParserError> {
@@ -291,11 +293,11 @@ impl Parser {
         let test = self.expression()?;
         self.consume(Token::RPAREN, "Expected ')' after `if (... ")?;
         let if_branch = self.statement()?;
-        let mut else_branch: Option<Box<Vec<Stmt>>> = None;
+        let mut else_branch: Option<Box<Stmt>> = None;
         if self.matches(vec![Token::ELSE]) {
-            else_branch = Some(Box::new(vec![self.statement()?]));
+            else_branch = Some(Box::new(self.statement()?));
         }
-        Ok(Stmt::If(test, Box::new(vec![if_branch]), else_branch))
+        Ok(Stmt::If(test, Box::new(if_branch), else_branch))
     }
 
     fn for_statement(&mut self) -> Result<Stmt, ParserError> {
@@ -319,7 +321,7 @@ impl Parser {
         self.consume(Token::RPAREN, "Expected ')' after for loop")?;
         let mut body = self.statement()?;
         if let Some(increment) = increment {
-            body = Stmt::Block(vec![body, Stmt::Expr(increment)]);
+            body = Stmt::Block(Box::new(vec![body, Stmt::Expr(increment)]));
         }
         let src = self.tokens[self.current].context.clone();
         if condition.is_none() {
@@ -327,7 +329,7 @@ impl Parser {
         }
         body = Stmt::While(condition.unwrap(), Box::new(body));
         if let Some(init) = init {
-            body = Stmt::Block(vec![init, body])
+            body = Stmt::Block(Box::new(vec![init, body]))
         }
         Ok(body)
     }
@@ -338,7 +340,7 @@ impl Parser {
             stmts.push(self.declaration()?)
         }
         self.consume(Token::RBRACE, "Expected block to end with an '}'.")?;
-        Ok(Stmt::Block(stmts))
+        Ok(Stmt::Block(Box::new(stmts)))
     }
 
     fn print_statement(&mut self) -> Result<Stmt, ParserError> {

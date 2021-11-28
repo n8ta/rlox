@@ -1,9 +1,11 @@
+use std::cell::RefCell;
 use crate::scanner::{Token, TokenInContext};
 use crate::scanner;
 use crate::scanner::Token::{MINUS, AND, OR, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, SLASH, MULT, BANG_EQUAL, EQUAL_EQUAL};
 use crate::source_ref::SourceRef;
 use crate::runtime::interpreter::{RuntimeException};
 use std::fmt::{Debug, Formatter};
+use std::rc::Rc;
 use crate::parser::{Class, ParserFunc};
 
 
@@ -49,10 +51,10 @@ impl ExprInContext {
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Expr(ExprTy),
-    Block(Vec<Stmt>),
+    Block(Box<Vec<Stmt>>),
     Print(ExprTy),
     Variable(String, Option<ExprTy>),
-    If(ExprTy, Box<Vec<Stmt>>, Option<Box<Vec<Stmt>>>),
+    If(ExprTy, Box<Stmt>, Option<Box<Stmt>>),
     While(ExprTy, Box<Stmt>),
     Function(ParserFunc),
     Return(Option<ExprTy>, SourceRef),
