@@ -44,7 +44,7 @@ pub fn resolve(prog: &mut Stmt) -> ResolverResult {
 
 #[derive(Debug, Clone)]
 struct Resolver {
-    scopes: Vec<HashMap<String, bool>>,
+    scopes: Vec<HashMap<String, (usize, bool)>>,
     current_class: ClassType,
 }
 
@@ -65,28 +65,26 @@ impl Resolver {
     fn declare(&mut self, name: &str) {
         // println!("Declare {} at scope {}", name, self.scopes.len() - 1);
         if let Some(scope) = self.scopes.last_mut() {
-            scope.insert(name.to_string(), false);
+            scope.insert(name.to_string(), (scope.len(), false));
         }
     }
     fn define(&mut self, name: &str) {
         // println!("Define {} at scope {}", name, self.scopes.len() - 1);
         if let Some(scope) = self.scopes.last_mut() {
-            scope.insert(name.to_string(), true);
+            scope.insert(name.to_string(), (scope.len(), true));
         }
     }
 
     fn resolve_local(&mut self, name: &str, resolved: &mut Option<Resolved>) {
-        let mut res = Resolved {
-            scope: 0,
-            offset: 0
-        };
         if self.scopes.len() == 0 {
             return;
         }
         for i in (0..(self.scopes.len())).rev() {
-            if self.scopes[i].contains_key(name) {
-                res.scope = (self.scopes.len() - 1) - i;
-                res.offset = 0;
+            if let Some((offset, defined)) = self.scopes[i].get(name) {
+                let res = Resolved {
+                    scope: (self.scopes.len() - 1) - i,
+                    offset: *offset,
+                };
                 resolved.insert(res);
                 break;
             }
@@ -138,18 +136,18 @@ impl Resolver {
             }
             Stmt::Class(class) => {
                 let enclosing = self.current_class.clone();
-
                 self.current_class = ClassType::Class;
+
                 self.declare(class.name().clone());
-
                 self.begin_scope();
-                self.scopes.last_mut().unwrap().insert("this".to_string(), true);
-
+                let last = self.scopes.last_mut().unwrap();
+                last.insert("this".to_string(), (last.len(), true));
                 for m in class.inner.methods.borrow_mut().iter_mut() {
                     self.resolve_func(m)?;
                 }
                 self.end_scope();
                 self.define(class.name());
+
                 self.current_class = enclosing;
             }
         }
@@ -193,8 +191,8 @@ impl Resolver {
             }
             Expr::Variable(var, resolved) => {
                 if let Some(scope) = self.scopes.last() {
-                    if let Some(bool) = scope.get(var) {
-                        if !bool {
+                    if let Some((_offset, defined)) = scope.get(var) {
+                        if !defined {
                             return Err(ResolverError::new("Can't read local variable in its own initializer.", &expr.context));
                         }
                     }
