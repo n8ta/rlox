@@ -22,15 +22,6 @@ impl Func {
         env.declare("this", &Value::INSTANCE(inst.clone()));
         Func::new(self.inner.func.clone(), env, self.inner.globals.clone())
     }
-    pub fn func(&self) -> ParserFunc {
-        self.inner.func.clone()
-    }
-    pub fn env(&self) -> Env {
-        self.inner.env.clone()
-    }
-    pub fn globals(&self) -> Env {
-        self.inner.globals.clone()
-    }
 }
 
 #[derive(Clone, Debug)]

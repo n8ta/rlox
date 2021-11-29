@@ -4,7 +4,6 @@ use std::rc::Rc;
 use crate::runtime::value::Value;
 use crate::parser::Class;
 use crate::{Callable, RuntimeException, SourceRef};
-use crate::runtime::func::Func;
 
 #[derive(Clone, Debug)]
 pub struct Instance {
@@ -20,7 +19,7 @@ impl Instance {
         self.class.name()
     }
 
-    pub fn find_methods(&self, method: &str, context: &SourceRef) -> Value {
+    pub fn find_methods(&self, method: &str, _context: &SourceRef) -> Value {
         match self.class.inner.runtime_methods.borrow_mut().get(method) {
             None => Value::NIL,
             Some(func)  => Value::FUNC(Rc::new(func.clone())),
@@ -38,8 +37,8 @@ impl Instance {
                         format!("Unable to find '{}' on {} it has fields \"{}\" and methods \"{}\"",
                                 field,
                                 self.class.name(),
-                                fields.iter().map(|(a, b)| a.to_string()).collect::<Vec<String>>().join(", "),
-                                methods.iter().map(|(a, b)| a.to_string()).collect::<Vec<String>>().join(", ")),
+                                fields.iter().map(|(a, _b)| a.to_string()).collect::<Vec<String>>().join(", "),
+                                methods.iter().map(|(a, _b)| a.to_string()).collect::<Vec<String>>().join(", ")),
                                 context.clone())),
                     Some(func) => {
                         let bound_method = func.clone().bind(&self);

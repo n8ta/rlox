@@ -3,7 +3,7 @@ use crate::parser::BinOp::{EQUAL_EQUAL, BANG_EQUAL, PLUS, SLASH, MINUS, MULT, GR
 use crate::source_ref::SourceRef;
 use crate::runtime::environment::Env;
 use std::rc::Rc;
-use crate::runtime::{func, is_equal};
+use crate::runtime::{is_equal};
 use std::fmt::{Debug};
 use crate::runtime::func::Func;
 use crate::runtime::Value;

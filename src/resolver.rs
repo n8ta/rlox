@@ -2,7 +2,7 @@ use crate::parser::{ParserFunc, Stmt, ExprTy, Expr};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use crate::source_ref::{SourceRef};
-use crate::{Callable, Source};
+use crate::{Callable};
 
 pub type ResolverResult = Result<(), ResolverError>;
 
@@ -39,11 +39,11 @@ pub fn resolve(prog: &mut Stmt) -> ResolverResult {
 #[derive(Debug, Clone)]
 struct Resolver {
     scopes: Vec<HashMap<String, bool>>,
-    currentClass: ClassType,
+    current_class: ClassType,
 }
 
 impl Resolver {
-    pub fn new() -> Resolver { Resolver { scopes: vec![], currentClass: ClassType::None } }
+    pub fn new() -> Resolver { Resolver { scopes: vec![], current_class: ClassType::None } }
 
     pub fn resolve(&mut self, program: &mut Stmt) -> ResolverResult {
         self.resolve_stmt(program)?;
@@ -125,9 +125,9 @@ impl Resolver {
                 }
             }
             Stmt::Class(class) => {
-                let enclosing = self.currentClass.clone();
+                let enclosing = self.current_class.clone();
 
-                self.currentClass = ClassType::Class;
+                self.current_class = ClassType::Class;
                 self.declare(class.name().clone());
 
                 self.begin_scope();
@@ -138,7 +138,7 @@ impl Resolver {
                 }
                 self.end_scope();
                 self.define(class.name());
-                self.currentClass = enclosing;
+                self.current_class = enclosing;
             }
         }
         Ok(())
@@ -157,7 +157,7 @@ impl Resolver {
     fn resolve_expr(&mut self, expr: &mut ExprTy) -> ResolverResult {
         match (&mut expr.expr, &mut expr.scope) {
             (Expr::This, scope) => {
-                if let ClassType::None = self.currentClass {
+                if let ClassType::None = self.current_class {
                     return Err(ResolverError::new("Cannot use `this` outside a class", &expr.context));
                 }
                 self.resolve_local(scope, "this");
@@ -198,7 +198,7 @@ impl Resolver {
                 self.resolve_expr(left)?;
                 self.resolve_expr(right)?;
             }
-            (Expr::Get(expr, getter_name), _) => {
+            (Expr::Get(expr, _getter_name), _) => {
                 self.resolve_expr(expr)?;
             }
             (Expr::Set(left, _field, right), _) => {

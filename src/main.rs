@@ -48,14 +48,14 @@ struct Lox {
 impl Lox {
     fn new() -> Lox {
         let mut globals = Env::new(None);
-        let clock = Value::FUNC(Rc::new(ClockRuntimeFunc {} ));
+        let clock = Value::FUNC(Rc::new(ClockRuntimeFunc {}));
         globals.declare("clock", &clock);
 
         return Lox {
             src: Rc::new(Source::new(String::new())),
             had_error: false,
             globals: globals.clone(),
-            env: Env::new(Some(globals))
+            env: Env::new(Some(globals)),
         };
     }
     fn main(&mut self, args: Vec<String>) {
@@ -103,30 +103,25 @@ impl Lox {
         let mut ast = match parse(tokens, src.clone()) {
             Ok(ast) => ast,
             Err(err) => {
-                eprintln!("[line:{}] Error: {}\n{}", err.context.line+1, &err.msg, err.context);
+                eprintln!("[line:{}] Error: {}\n{}", err.context.line + 1, &err.msg, err.context);
                 return;
             }
         };
 
-        match resolve(&mut ast) {
-            Ok(_) => {}
-            Err(err) => {
-                eprintln!("{}",err);
-                return;
-            }
+        if let Err(err) = resolve(&mut ast) {
+            eprintln!("{}", err);
+            return;
         }
 
-        match interpret(&ast, self.globals.clone(), self.globals.clone()) {
-            Ok(_) => {}
-            Err(err) => match err {
+        if let Err(err) = interpret(&ast, self.globals.clone(), self.globals.clone()) {
+            match err {
                 LoxControlFlow::CFRuntime(err) => {
-                    eprintln!("[line:{}] Error: {}\n{}", err.context.line+1, &err.msg, err.context)
+                    eprintln!("[line:{}] Error: {}\n{}", err.context.line + 1, &err.msg, err.context)
                 }
                 LoxControlFlow::CFReturn(value, context) => {
                     eprintln!("[line:{}] Error: no function to return from! (value was {})\n{}", context.line, value, context)
                 }
             }
-
         }
     }
 

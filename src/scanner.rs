@@ -3,7 +3,6 @@ use crate::source_ref::{SourceRef, Source};
 use std::fmt::{Display, Formatter, Debug};
 use crate::scanner::Token::IDENTIFIER;
 use std::rc::Rc;
-use crate::runtime::is_equal;
 use crate::{Callable, Value};
 
 

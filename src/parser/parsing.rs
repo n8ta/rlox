@@ -143,7 +143,7 @@ impl Parser {
         };
         self.consume(Token::LBRACE, "Expected a '{' before class body")?;
         let mut methods = vec![];
-        while (!self.check(Token::RBRACE) && !self.is_at_end()) {
+        while !self.check(Token::RBRACE) && !self.is_at_end() {
             methods.push(self.function()?);
         }
         self.consume(Token::RBRACE, "Expected a '}' after class body")?;
@@ -416,7 +416,7 @@ impl Parser {
         loop {
             if self.matches(vec![Token::LPAREN]) {
                 expr = self.finish_call(expr)?;
-            } else if (self.matches(vec![Token::DOT])) {
+            } else if self.matches(vec![Token::DOT]) {
                 let ident = self.consume(Token::IDENTIFIER(format!("")), "Expected an identifier after a '.'")?;
                 if let Token::IDENTIFIER(name) = &ident.token {
                     expr = Box::new(ExprInContext::new(Expr::Get(expr, name.clone()), ident.context));
