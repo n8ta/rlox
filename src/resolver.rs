@@ -57,11 +57,13 @@ impl Resolver {
         self.scopes.pop();
     }
     fn declare(&mut self, name: &str) {
+        // println!("Declare {} at scope {}", name, self.scopes.len() - 1);
         if let Some(scope) = self.scopes.last_mut() {
             scope.insert(name.to_string(), false);
         }
     }
     fn define(&mut self, name: &str) {
+        // println!("Define {} at scope {}", name, self.scopes.len() - 1);
         if let Some(scope) = self.scopes.last_mut() {
             scope.insert(name.to_string(), true);
         }
@@ -73,9 +75,11 @@ impl Resolver {
         }
         for i in (0..(self.scopes.len())).rev() {
             if self.scopes[i].contains_key(name) {
-                expr.insert(self.scopes.len() - 1 - i);
+                expr.insert((self.scopes.len() - 1) - i);
+                break;
             }
         }
+        // println!("Resolving {} at dist {:?}", name, expr);
     }
     fn resolve_stmt(&mut self, stmt: &mut Stmt) -> ResolverResult {
         match stmt {
@@ -132,9 +136,8 @@ impl Resolver {
                 for m in class.inner.methods.borrow_mut().iter_mut() {
                     self.resolve_func(m)?;
                 }
-                self.define(class.name());
                 self.end_scope();
-
+                self.define(class.name());
                 self.currentClass = enclosing;
             }
         }
@@ -177,16 +180,14 @@ impl Resolver {
                 self.resolve_expr(expr)?;
             }
             (Expr::Variable(var), scope) => {
-                match self.scopes.last() {
-                    None => {}
-                    Some(mapping) => {
-                        if let Some(bool) = mapping.get(var) {
-                            if !bool {
-                                return Err(ResolverError::new("Can't read local variable in its own initializer.", &expr.context));
-                            }
+                if let Some(scope) = self.scopes.last() {
+                    if let Some(bool) = scope.get(var) {
+                        if !bool {
+                            return Err(ResolverError::new("Can't read local variable in its own initializer.", &expr.context));
                         }
                     }
                 }
+                // println!("Resolve {}", var,);
                 self.resolve_local(scope, var);
             }
             (Expr::Assign(name, value), scope) => {
@@ -229,7 +230,7 @@ impl Resolver {
 //
 //     if let Stmt::Function(func) = &stmts[0] {
 //         if let Stmt::Print(val) = &func.body[1] {
-//             println!("Checking {:?}", val);
+// //             println!("Checking {:?}", val);
 //             assert!(val.scope.is_some(), "resolver should assign a scope to a stack variable");
 //         } else {
 //             assert!(false)

@@ -95,10 +95,12 @@ impl Interpreter {
             Stmt::Variable(name, value) => {
                 match value {
                     None => {
+                        // println!("Declaring {} as nil", &name);
                         self.env.declare(&name, &NIL);
                     }
                     Some(lit) => {
                         let value = &self.execute_expr(&lit)?;
+                        // println!("Declaring {} as {}", &name, value);
                         self.env.declare(&name, value);
                     }
                 };
@@ -197,6 +199,7 @@ impl Interpreter {
             }
             Expr::Variable(var) => {
                 if let Some(distance) = expr.scope {
+                    // println!("/{} at dist {}", var, distance);
                     self.env.get_at(distance, &var, &expr.context).or_else(|r| r.into())
                 } else {
                     self.globals.fetch(&var, &expr.context).or_else(|r| r.into())
@@ -204,6 +207,7 @@ impl Interpreter {
             }
             Expr::Assign(var, new_val) => {
                 let value = self.execute_expr(&new_val)?;
+                // println!("Assigning {} as {}", var, value);
                 self.env.assign(&var, &value, &expr.context)?;
                 Ok(Value::NIL)
             }
