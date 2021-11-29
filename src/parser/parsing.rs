@@ -9,7 +9,7 @@ use crate::runtime::Value;
 pub fn parse(tokens: Tokens, source: Rc<Source>) -> Result<Stmt, ParserError> {
     let mut parser: Parser = Parser::new(tokens, source);
     let v = parser.parse()?;
-    Ok(Stmt::Block(Box::new(v)))
+    Ok(v)
 }
 
 
@@ -30,12 +30,12 @@ impl Parser {
         Parser { tokens, current: 0, source }
     }
 
-    fn parse(&mut self) -> Result<Vec<Stmt>, ParserError> {
+    fn parse(&mut self) -> Result<Stmt, ParserError> {
         let mut stmts: Vec<Stmt> = vec![];
         while !self.is_at_end() {
             stmts.push(self.declaration()?)
         }
-        Ok(stmts)
+        Ok(Stmt::Block(Box::new(stmts), None))
     }
 
     fn check(&mut self, typ: Token) -> bool {
@@ -147,7 +147,7 @@ impl Parser {
             methods.push(self.function()?);
         }
         self.consume(Token::RBRACE, "Expected a '}' after class body")?;
-        Ok(Stmt::Class(Class::new(name, name_in_context.context, methods)))
+        Ok(Stmt::Class(Class::new(name, name_in_context.context, methods), None))
     }
 
     fn function(&mut self) -> Result<ParserFunc, ParserError> {
@@ -182,13 +182,13 @@ impl Parser {
         self.consume(RPAREN, "Expected a ')' after function parameters")?;
         self.consume(LBRACE, "Expected a '{' after a function declaration")?;
         let body =
-            if let Stmt::Block(blk) = self.block()? {
+            if let Stmt::Block(blk, _) = self.block()? {
                 *blk
             } else {
                 panic!("block() didn't return a block");
             };
 
-        Ok(ParserFunc::new(name, params, Stmt::Block(Box::new(body)), name_in_context.context.clone()))
+        Ok(ParserFunc::new(name, params, Stmt::Block(Box::new(body), None), name_in_context.context.clone()))
     }
 
     fn variable_declaration(&mut self) -> Result<Stmt, ParserError> {
@@ -321,7 +321,7 @@ impl Parser {
         self.consume(Token::RPAREN, "Expected ')' after for loop")?;
         let mut body = self.statement()?;
         if let Some(increment) = increment {
-            body = Stmt::Block(Box::new(vec![body, Stmt::Expr(increment)]));
+            body = Stmt::Block(Box::new(vec![body, Stmt::Expr(increment)]), None);
         }
         let src = self.tokens[self.current].context.clone();
         if condition.is_none() {
@@ -329,7 +329,7 @@ impl Parser {
         }
         body = Stmt::While(condition.unwrap(), Box::new(body));
         if let Some(init) = init {
-            body = Stmt::Block(Box::new(vec![init, body]))
+            body = Stmt::Block(Box::new(vec![init, body]), None)
         }
         Ok(body)
     }
@@ -340,7 +340,7 @@ impl Parser {
             stmts.push(self.declaration()?)
         }
         self.consume(Token::RBRACE, "Expected block to end with an '}'.")?;
-        Ok(Stmt::Block(Box::new(stmts)))
+        Ok(Stmt::Block(Box::new(stmts), None))
     }
 
     fn print_statement(&mut self) -> Result<Stmt, ParserError> {

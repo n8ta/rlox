@@ -3,7 +3,7 @@ use crate::scanner::Token::{MINUS, AND, OR, GREATER, GREATER_EQUAL, LESS, LESS_E
 use crate::source_ref::SourceRef;
 use std::fmt::{Debug, Formatter};
 use crate::parser::{Class, ParserFunc};
-use crate::resolver::Resolved;
+use crate::resolver::{Resolved, ScopeSize};
 
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -47,14 +47,14 @@ impl ExprInContext {
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Expr(ExprTy),
-    Block(Box<Vec<Stmt>>),
+    Block(Box<Vec<Stmt>>, Option<ScopeSize>),
     Print(ExprTy),
     Variable(String, Option<ExprTy>),
     If(ExprTy, Box<Stmt>, Option<Box<Stmt>>),
     While(ExprTy, Box<Stmt>),
     Function(ParserFunc),
     Return(Option<ExprTy>, SourceRef),
-    Class(Class)
+    Class(Class, Option<ScopeSize>)
 }
 
 #[derive(Clone, Debug, PartialEq)]

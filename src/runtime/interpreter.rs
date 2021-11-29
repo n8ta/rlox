@@ -66,7 +66,7 @@ impl Interpreter {
 
     fn interpret(&mut self, stmt: &Stmt) -> InterpreterResult {
         match stmt {
-            Stmt::Class(class) => {
+            Stmt::Class(class, _scope_size) => {
                 self.env.declare(class.name(), &Value::NIL);
                 let class_runtime = Value::CLASS(class.clone());
                 let mut rt_methods = class.inner.runtime_methods.borrow_mut();
@@ -76,7 +76,7 @@ impl Interpreter {
                 }
                 self.env.assign(class.name(), &class_runtime, &class.context())?;
             }
-            Stmt::Block(block_stmts) => {
+            Stmt::Block(block_stmts, _scope_size) => {
                 let parent = self.env.clone();
                 let new_scope = Env::new(Some(parent.clone()));
                 self.env = new_scope;

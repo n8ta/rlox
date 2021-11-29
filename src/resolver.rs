@@ -13,6 +13,9 @@ pub struct ResolverError {
     source: SourceRef,
 }
 
+
+pub type ScopeSize = usize;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Resolved {
     pub scope: usize,
@@ -75,6 +78,10 @@ impl Resolver {
         }
     }
 
+    fn last_size(&self) -> usize {
+        self.scopes.last().unwrap().len()
+    }
+
     fn resolve_local(&mut self, name: &str, resolved: &mut Option<Resolved>) {
         if self.scopes.len() == 0 {
             return;
@@ -96,11 +103,12 @@ impl Resolver {
             Stmt::Expr(expr) => {
                 self.resolve_expr(expr)?;
             }
-            Stmt::Block(stmts) => {
+            Stmt::Block(stmts, scope_size) => {
                 self.begin_scope();
                 for stmt in stmts.iter_mut() {
                     self.resolve(stmt)?;
                 }
+                scope_size.insert(self.scopes.last_mut().unwrap().len());
                 self.end_scope();
             }
             Stmt::Print(expr) => {
@@ -134,7 +142,7 @@ impl Resolver {
                     self.resolve_expr(expr)?;
                 }
             }
-            Stmt::Class(class) => {
+            Stmt::Class(class, scope_size) => {
                 let enclosing = self.current_class.clone();
                 self.current_class = ClassType::Class;
 
@@ -145,6 +153,7 @@ impl Resolver {
                 for m in class.inner.methods.borrow_mut().iter_mut() {
                     self.resolve_func(m)?;
                 }
+                scope_size.insert(self.last_size());
                 self.end_scope();
                 self.define(class.name());
 
@@ -161,6 +170,7 @@ impl Resolver {
         }
         let mut body_mut = func.inner.body.borrow_mut();
         self.resolve(&mut body_mut)?;
+
         self.end_scope();
         Ok(())
     }
