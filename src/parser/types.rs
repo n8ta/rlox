@@ -24,12 +24,11 @@ pub type ExprTy = Box<ExprInContext>;
 pub struct ExprInContext {
     pub context: SourceRef,
     pub expr: Expr,
-    pub scope: Option<usize>,
 }
 
 impl Debug for ExprInContext {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("ExprInContext [expr:{:?} scope:{:?}]", self.expr, self.scope))
+        f.write_str(&format!("ExprInContext [expr:{:?}]", self.expr))
     }
 }
 
@@ -41,7 +40,7 @@ impl PartialEq for ExprInContext {
 
 impl ExprInContext {
     pub fn new(expr: Expr, context: SourceRef) -> ExprInContext {
-        ExprInContext { expr, context, scope: None }
+        ExprInContext { expr, context }
     }
 }
 
