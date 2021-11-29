@@ -19,6 +19,7 @@ use crate::source_ref::{Source, SourceRef};
 use crate::runtime::{Callable, Value};
 use std::time::{SystemTime, UNIX_EPOCH};
 use crate::resolver::{resolve};
+use crate::runtime::fast_env::FastEnv;
 
 
 #[derive(Clone, Debug)]
@@ -40,22 +41,22 @@ impl Callable for ClockRuntimeFunc {
 
 struct Lox {
     had_error: bool,
-    env: Env,
-    globals: Env,
+    env: FastEnv,
+    globals: FastEnv,
     src: Rc<Source>,
 }
 
 impl Lox {
     fn new() -> Lox {
-        let mut globals = Env::new(None);
+        let mut globals = FastEnv::new(None, 1);
         let clock = Value::FUNC(Rc::new(ClockRuntimeFunc {}));
-        globals.declare("clock", &clock);
+        globals.declare(0, "clock", &clock);
 
         return Lox {
             src: Rc::new(Source::new(String::new())),
             had_error: false,
             globals: globals.clone(),
-            env: Env::new(Some(globals)),
+            env: FastEnv::new(Some(globals), 0),
         };
     }
     fn main(&mut self, args: Vec<String>) {

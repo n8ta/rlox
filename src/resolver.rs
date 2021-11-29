@@ -66,15 +66,26 @@ impl Resolver {
         self.scopes.pop();
     }
     fn declare(&mut self, name: &str) {
-        // println!("Declare {} at scope {}", name, self.scopes.len() - 1);
+        // // println!("Declare {} at scope {}", name, self.scopes.len() - 1);
+        let last_size = self.last_size();
         if let Some(scope) = self.scopes.last_mut() {
-            scope.insert(name.to_string(), (scope.len(), false));
+            // println!("declare {} at offset{}", name, last_size);
+            match scope.get(name) {
+                None => scope.insert(name.to_string(), (last_size, false)),
+                Some((offset, bool)) => scope.insert(name.to_string(), (*offset, false)),
+            };
         }
     }
     fn define(&mut self, name: &str) {
-        // println!("Define {} at scope {}", name, self.scopes.len() - 1);
+        // // println!("Define {} at scope {}", name, self.scopes.len() - 1);
+        let last_size = self.last_size();
         if let Some(scope) = self.scopes.last_mut() {
-            scope.insert(name.to_string(), (scope.len(), true));
+            // println!("define {} at offset{}", name, last_size);
+            // scope.insert(name.to_string(), (last_size, true));
+            match scope.get(name) {
+                None => scope.insert(name.to_string(), (last_size, true)),
+                Some((offset, bool)) => scope.insert(name.to_string(), (*offset, true)),
+            };
         }
     }
 
@@ -92,11 +103,12 @@ impl Resolver {
                     scope: (self.scopes.len() - 1) - i,
                     offset: *offset,
                 };
+                // println!("Resolved {} at scope {} offset {}", name,  res.scope, res.offset);
                 resolved.insert(res);
                 break;
             }
         }
-        // println!("Resolving {} at dist {:?}", name, expr);
+        // // println!("Resolving {} at dist {:?}", name, expr);
     }
     fn resolve_stmt(&mut self, stmt: &mut Stmt) -> ResolverResult {
         match stmt {
@@ -114,12 +126,13 @@ impl Resolver {
             Stmt::Print(expr) => {
                 self.resolve_expr(expr)?;
             }
-            Stmt::Variable(name, init) => {
+            Stmt::Variable(name, init, resolved) => {
                 self.declare(name);
                 if let Some(expr) = init {
                     self.resolve_expr(expr)?;
                 }
                 self.define(name);
+                self.resolve_local(name, resolved);
             }
             Stmt::If(test, if_branch, else_branch) => {
                 self.resolve_expr(test)?;
@@ -132,9 +145,10 @@ impl Resolver {
                 self.resolve_expr(test)?;
                 self.resolve_stmt(body)?;
             }
-            Stmt::Function(func) => {
+            Stmt::Function(func, resolved) => {
                 self.declare(func.name());
                 self.define(func.name());
+                self.resolve_local(func.name(), resolved);
                 self.resolve_func(func)?;
             }
             Stmt::Return(expr, _context) => {
@@ -142,10 +156,9 @@ impl Resolver {
                     self.resolve_expr(expr)?;
                 }
             }
-            Stmt::Class(class, scope_size) => {
+            Stmt::Class(class, resolved, scope_size) => {
                 let enclosing = self.current_class.clone();
                 self.current_class = ClassType::Class;
-
                 self.declare(class.name().clone());
                 self.begin_scope();
                 let last = self.scopes.last_mut().unwrap();
@@ -156,6 +169,7 @@ impl Resolver {
                 scope_size.insert(self.last_size());
                 self.end_scope();
                 self.define(class.name());
+                self.resolve_local(class.name(), resolved);
 
                 self.current_class = enclosing;
             }
@@ -171,6 +185,8 @@ impl Resolver {
         let mut body_mut = func.inner.body.borrow_mut();
         self.resolve(&mut body_mut)?;
 
+        let mut scope_size = func.inner.scope_size.borrow_mut();
+        scope_size.insert(self.last_size());
         self.end_scope();
         Ok(())
     }
@@ -207,7 +223,6 @@ impl Resolver {
                         }
                     }
                 }
-                // println!("Resolve {}", var,);
                 self.resolve_local(var, resolved);
             }
             Expr::Assign(name, value, resolved) => {
@@ -250,7 +265,7 @@ impl Resolver {
 //
 //     if let Stmt::Function(func) = &stmts[0] {
 //         if let Stmt::Print(val) = &func.body[1] {
-// //             println!("Checking {:?}", val);
+// // //             println!("Checking {:?}", val);
 //             assert!(val.scope.is_some(), "resolver should assign a scope to a stack variable");
 //         } else {
 //             assert!(false)

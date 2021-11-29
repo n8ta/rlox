@@ -8,6 +8,7 @@ pub(crate) mod interpreter;
 pub(crate) mod value;
 pub(crate) mod func;
 pub(crate) mod instance;
+pub(crate) mod fast_env;
 
 pub trait Callable {
     fn arity(&self) -> u8;

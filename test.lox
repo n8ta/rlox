@@ -1,2 +1,12 @@
 var x = 2;
+var y = 3;
+{
+var z  =4;
+print z;
 print x;
+var y = 444;
+print y;
+}
+print x;
+print y;
+

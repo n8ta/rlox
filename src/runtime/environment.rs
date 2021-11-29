@@ -97,7 +97,6 @@ impl EnvInner {
             } else {
                 panic!("Compiled error.... Resolver calculated bad scope depth.");
             }
-
         }
     }
 

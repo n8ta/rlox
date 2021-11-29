@@ -49,12 +49,12 @@ pub enum Stmt {
     Expr(ExprTy),
     Block(Box<Vec<Stmt>>, Option<ScopeSize>),
     Print(ExprTy),
-    Variable(String, Option<ExprTy>),
+    Variable(String, Option<ExprTy>, Option<Resolved>),
     If(ExprTy, Box<Stmt>, Option<Box<Stmt>>),
     While(ExprTy, Box<Stmt>),
-    Function(ParserFunc),
+    Function(ParserFunc, Option<Resolved>),
     Return(Option<ExprTy>, SourceRef),
-    Class(Class, Option<ScopeSize>)
+    Class(Class, Option<Resolved>, Option<ScopeSize>)
 }
 
 #[derive(Clone, Debug, PartialEq)]

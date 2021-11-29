@@ -1,7 +1,7 @@
 use crate::parser::{ExprTy, Expr, UnaryOp, Stmt, LogicalOp};
 use crate::parser::BinOp::{EQUAL_EQUAL, BANG_EQUAL, PLUS, SLASH, MINUS, MULT, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, AND, OR};
 use crate::source_ref::SourceRef;
-use crate::runtime::environment::Env;
+use crate::runtime::fast_env::FastEnv;
 use std::rc::Rc;
 use crate::runtime::{is_equal};
 use std::fmt::{Debug};
@@ -45,14 +45,14 @@ fn is_num(lit: Value, context: &SourceRef) -> Result<f64, RuntimeException> {
     }
 }
 
-pub fn interpret(stmts: &Stmt, env: Env, globals: Env) -> InterpreterResult {
+pub fn interpret(stmts: &Stmt, env: FastEnv, globals: FastEnv) -> InterpreterResult {
     let mut interp = Interpreter::new(env, globals);
     interp.interpret(stmts)
 }
 
 pub struct Interpreter {
-    pub env: Env,
-    pub globals: Env,
+    pub env: FastEnv,
+    pub globals: FastEnv,
 }
 
 impl Into<InterpreterResult> for RuntimeException {
@@ -62,23 +62,24 @@ impl Into<InterpreterResult> for RuntimeException {
 }
 
 impl Interpreter {
-    fn new(env: Env, globals: Env) -> Interpreter { Interpreter { env, globals } }
+    fn new(env: FastEnv, globals: FastEnv) -> Interpreter { Interpreter { env, globals } }
 
     fn interpret(&mut self, stmt: &Stmt) -> InterpreterResult {
         match stmt {
-            Stmt::Class(class, _scope_size) => {
-                self.env.declare(class.name(), &Value::NIL);
+            Stmt::Class(class, resolution, scope_size) => {
+                let resolution = resolution.as_ref().unwrap();
+                self.env.declare(resolution.offset, class.name(), &Value::NIL);
                 let class_runtime = Value::CLASS(class.clone());
                 let mut rt_methods = class.inner.runtime_methods.borrow_mut();
                 for method in class.inner.methods.borrow().iter() {
                     let func = Func::new(method.clone(), self.env.clone(), self.globals.clone());
                     rt_methods.insert(func.name().to_string(), func);
                 }
-                self.env.assign(class.name(), &class_runtime, &class.context())?;
+                self.env.assign(class.name(), resolution.scope, resolution.offset, &class_runtime, &class.context())?;
             }
-            Stmt::Block(block_stmts, _scope_size) => {
+            Stmt::Block(block_stmts, scope_size) => {
                 let parent = self.env.clone();
-                let new_scope = Env::new(Some(parent.clone()));
+                let new_scope = FastEnv::new(Some(parent.clone()), scope_size.unwrap());
                 self.env = new_scope;
                 let mut res: InterpreterResult = Ok(Value::NIL);
                 for stmt in block_stmts.iter() {
@@ -93,16 +94,15 @@ impl Interpreter {
             Stmt::Print(val) => {
                 println!("{}", self.execute_expr(&val)?);
             }
-            Stmt::Variable(name, value) => {
+            Stmt::Variable(name, value, resolved) => {
                 match value {
                     None => {
-                        // println!("Declaring {} as nil", &name);
-                        self.env.declare(&name, &NIL);
+                        self.env.declare(resolved.as_ref().unwrap().offset, name, &NIL);
                     }
                     Some(lit) => {
                         let value = &self.execute_expr(&lit)?;
                         // println!("Declaring {} as {}", &name, value);
-                        self.env.declare(&name, value);
+                        self.env.declare(resolved.as_ref().unwrap().offset, name, value);
                     }
                 };
             }
@@ -119,8 +119,8 @@ impl Interpreter {
                     self.interpret(&*body)?;
                 }
             }
-            Stmt::Function(func) => {
-                self.env.declare(func.name().clone(),
+            Stmt::Function(func, resolved) => {
+                self.env.declare(resolved.as_ref().unwrap().offset, func.name(),
                                  &Value::FUNC(Rc::new(
                                      Func::new(func.clone(), self.env.clone(), self.globals.clone())
                                  )));
@@ -202,16 +202,18 @@ impl Interpreter {
                 if let Some(resolution) = resolved {
                     // println!("Getting {} from locals", var);
                     // println!("/{} at dist {}", var, distance);
-                    self.env.get_at(resolution.scope, &var, &expr.context).or_else(|r| r.into())
+                    self.env.fetch(var, resolved.as_ref().unwrap().scope, resolved.as_ref().unwrap().offset, &expr.context).or_else(|r| r.into())
+                    // self.env.get_at(resolution.scope, &var, &expr.context).or_else(|r| r.into())
                 } else {
                     // println!("Getting {} from globals", var);
-                    self.globals.fetch(&var, &expr.context).or_else(|r| r.into())
+                    self.globals.fetch("clock", 0, 0, &expr.context).or_else(|r| r.into())
                 }
             }
-            Expr::Assign(var, new_val, _resolved) => {
+            Expr::Assign(var, new_val, resolved) => {
+                let resolved = resolved.as_ref().unwrap();
                 let value = self.execute_expr(&new_val)?;
                 // println!("Assigning {} as {}", var, value);
-                self.env.assign(&var, &value, &expr.context)?;
+                self.env.assign(&var, resolved.scope, resolved.offset, &value, &expr.context)?;
                 Ok(Value::NIL)
             }
             Expr::Logical(left, op, right) => {
@@ -262,9 +264,9 @@ impl Interpreter {
 
     fn lookup_variable(&self, name: &str, scope: &Option<Resolved>, context: &SourceRef) -> InterpreterResult {
         let res = if let Some(resolved) = scope {
-            self.env.get_at(resolved.scope, name, context)
+            self.env.fetch(name, resolved.scope, resolved.offset, context)
         } else {
-            self.globals.fetch(name, context).into()
+            self.globals.fetch(name, 0, 0, context).into()
         };
         res.or_else(|e| InterpreterResult::Err(CFRuntime(e)))
     }

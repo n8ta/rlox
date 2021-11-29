@@ -2,6 +2,7 @@ use std::rc::Rc;
 use crate::{Callable, SourceRef};
 use crate::parser::ParserFunc;
 use crate::runtime::environment::Env;
+use crate::runtime::fast_env::FastEnv;
 use crate::runtime::Instance;
 use crate::runtime::interpreter::{interpret, LoxControlFlow, RuntimeException};
 use crate::runtime::value::Value;
@@ -9,17 +10,17 @@ use crate::runtime::value::Value;
 /// Runtime Representation of a Func
 #[derive(Clone, Debug)]
 pub struct Func {
-    inner: Rc<FuncInner>
+    inner: Rc<FuncInner>,
 }
 
 
 impl Func {
-    pub(crate) fn new(func: ParserFunc, env: Env, globals: Env) -> Func {
-        Func { inner:  Rc::new(FuncInner { func, env, globals }) }
+    pub(crate) fn new(func: ParserFunc, env: FastEnv, globals: FastEnv) -> Func {
+        Func { inner: Rc::new(FuncInner { func, env, globals }) }
     }
     pub fn bind(self, inst: &Instance) -> crate::runtime::func::Func {
-        let mut env = Env::new(Some(self.inner.env.clone()));
-        env.declare("this", &Value::INSTANCE(inst.clone()));
+        let mut env = FastEnv::new(Some(self.inner.env.clone()), 1);
+        env.declare(0, "this", &Value::INSTANCE(inst.clone()));
         Func::new(self.inner.func.clone(), env, self.inner.globals.clone())
     }
 }
@@ -27,8 +28,8 @@ impl Func {
 #[derive(Clone, Debug)]
 struct FuncInner {
     func: ParserFunc,
-    env: Env,
-    globals: Env,
+    env: FastEnv,
+    globals: FastEnv,
 }
 
 impl Callable for Func {
@@ -36,9 +37,10 @@ impl Callable for Func {
         self.inner.func.inner.args.len() as u8
     }
     fn call(&self, args: Vec<Value>, _callsite: SourceRef) -> Result<Value, RuntimeException> {
-        let mut new_env = Env::new(Some(self.inner.env.clone()));
+        let size = self.inner.func.inner.scope_size.borrow().unwrap();
+        let mut new_env = FastEnv::new(Some(self.inner.env.clone()), size);
         for i in 0..self.inner.func.inner.args.len() {
-            new_env.declare(&self.inner.func.inner.args[i].0.clone(), &args[i]);
+            new_env.declare(i, &self.inner.func.inner.args[0].0, &args[i]);
         }
         match interpret(&self.inner.func.inner.body.borrow(), new_env, self.inner.globals.clone()) {
             Ok(lit) => Ok(lit),

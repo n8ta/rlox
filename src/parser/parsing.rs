@@ -122,7 +122,7 @@ impl Parser {
         } else if self.matches(vec![Token::CLASS]) {
             self.class()
         } else if self.matches(vec![Token::FUN]) {
-            self.function().and_then(|f| Ok(Stmt::Function(f)))
+            self.function().and_then(|f| Ok(Stmt::Function(f, None)))
         } else {
             match self.statement() {
                 Ok(stmt) => Ok(stmt),
@@ -147,7 +147,7 @@ impl Parser {
             methods.push(self.function()?);
         }
         self.consume(Token::RBRACE, "Expected a '}' after class body")?;
-        Ok(Stmt::Class(Class::new(name, name_in_context.context, methods), None))
+        Ok(Stmt::Class(Class::new(name, name_in_context.context, methods), None, None))
     }
 
     fn function(&mut self) -> Result<ParserFunc, ParserError> {
@@ -200,7 +200,7 @@ impl Parser {
         }
         self.consume(SEMICOLON, "Expected ';' after variable declaration")?;
         if let Token::IDENTIFIER(str) = name.token {
-            return Ok(Stmt::Variable(str.clone(), init));
+            return Ok(Stmt::Variable(str.clone(), init, None));
         }
         Err(self.err(format!("FAILED didnt find a IDENT where expected")))
     }
