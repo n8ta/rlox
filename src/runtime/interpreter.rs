@@ -41,7 +41,7 @@ fn is_num(lit: Value, context: &SourceRef) -> Result<f64, RuntimeException> {
     if let Value::NUMBER(num) = lit {
         Ok(num)
     } else {
-        Err(RuntimeException::new(format!("Expected a number found {:?}", lit), context.clone()))
+        Err(RuntimeException::new(format!("Expected a number found {:?}", serde_json::to_string_pretty(&lit).unwrap()), context.clone()))
     }
 }
 
@@ -186,14 +186,14 @@ impl Interpreter {
                         if let Expr::Literal(Value::BOOL(bool_l)) = inner.expr {
                             Ok(Value::BOOL(!bool_l))
                         } else {
-                            Err(RuntimeException::new(format!("Cannot apply ! to a non-bool {:?}", inner), expr.context.clone()).into())
+                            Err(RuntimeException::new(format!("Cannot apply ! to a non-bool"), expr.context.clone()).into())
                         }
                     }
                     UnaryOp::MINUS => {
                         if let Expr::Literal(Value::NUMBER(num)) = inner.expr {
                             Ok(Value::NUMBER(-num))
                         } else {
-                            Err(RuntimeException::new(format!("Cannot apply - to a non-number {:?}", inner), expr.context.clone()).into())
+                            Err(RuntimeException::new(format!("Cannot apply - to a non-number"), expr.context.clone()).into())
                         }
                     }
                 }

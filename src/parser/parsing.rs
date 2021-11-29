@@ -50,7 +50,9 @@ impl Parser {
         if self.check(typ.clone()) { return Ok(self.advance()); }
         Err(ParserError::new(
             format!("{} - didn't find a {:?} as expected. Found a {:?}",
-                    message, typ, self.peek().token),
+                    message,
+                    serde_json::to_string_pretty(&typ).unwrap(),
+                    serde_json::to_string_pretty(&self.peek().token).unwrap()),
             self.tokens[self.current].context.clone()))
     }
 
@@ -241,7 +243,7 @@ impl Parser {
             } else if let Expr::Get(get_expr, field) = expr.expr {
                 return Ok(mk_expr(Expr::Set(get_expr, field, value), expr.context));
             } else {
-                return Err(self.err(format!("Invalid assignment target {:?}", expr.expr)));
+                return Err(self.err(format!("Invalid assignment target:\n{}", expr.context)));
             }
         }
         Ok(expr)

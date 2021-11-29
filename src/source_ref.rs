@@ -50,12 +50,16 @@ impl Source {
     }
 }
 
-#[derive(Clone, PartialOrd, PartialEq, Ord, Eq, Debug)]
+#[derive(Clone, PartialOrd, PartialEq, Ord, Eq, Debug, serde::Serialize)]
 pub struct SourceRef {
     // Represents a section of a larger string
+    #[serde(skip_serializing)]
     pub line: usize,
+    #[serde(skip_serializing)]
     offset: usize,
+    #[serde(skip_serializing)]
     len: usize, // starting at start_line[offset]
+    #[serde(skip_serializing)]
     src: Rc<Source>,
 }
 

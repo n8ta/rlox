@@ -2,9 +2,12 @@ use crate::scanner::{Token, TokenInContext};
 use crate::scanner::Token::{MINUS, AND, OR, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, SLASH, MULT, BANG_EQUAL, EQUAL_EQUAL};
 use crate::source_ref::SourceRef;
 use std::fmt::{Debug, Formatter};
+use std::ptr::write;
+use crate::Callable;
 use crate::parser::{Class, ParserFunc};
 use crate::resolver::{Resolved, ScopeSize};
 
+use serde::Serialize;
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct ParserError {
@@ -20,16 +23,11 @@ pub type Tokens = Vec<TokenInContext>;
 
 pub type ExprTy = Box<ExprInContext>;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Debug)]
 pub struct ExprInContext {
+    #[serde(skip_serializing)]
     pub context: SourceRef,
     pub expr: Expr,
-}
-
-impl Debug for ExprInContext {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("ExprInContext [expr:{:?}]", self.expr))
-    }
 }
 
 impl PartialEq for ExprInContext {
@@ -44,7 +42,7 @@ impl ExprInContext {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Serialize, Debug)]
 pub enum Stmt {
     Expr(ExprTy),
     Block(Box<Vec<Stmt>>, Option<ScopeSize>),
@@ -54,16 +52,17 @@ pub enum Stmt {
     While(ExprTy, Box<Stmt>),
     Function(ParserFunc, Option<Resolved>),
     Return(Option<ExprTy>, SourceRef),
-    Class(Class, Option<Resolved>, Option<ScopeSize>)
+    Class(Class, Option<Resolved>, Option<ScopeSize>),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub enum LogicalOp {
     AND,
     OR,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq, Serialize, Debug)]
 pub enum Expr {
     Binary(ExprTy, BinOp, ExprTy),
     Call(ExprTy, Vec<ExprTy>),
@@ -79,7 +78,7 @@ pub enum Expr {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Clone, PartialOrd, PartialEq, Debug)]
+#[derive(Clone, PartialOrd, PartialEq, Debug, serde::Serialize)]
 pub enum BinOp {
     EQUAL_EQUAL,
     BANG_EQUAL,
@@ -96,7 +95,7 @@ pub enum BinOp {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Clone, PartialOrd, PartialEq, Debug)]
+#[derive(Clone, PartialOrd, PartialEq, Debug, serde::Serialize)]
 pub enum UnaryOp {
     MINUS,
     BANG,
@@ -107,7 +106,7 @@ impl LogicalOp {
         match tk {
             AND => LogicalOp::AND,
             OR => LogicalOp::OR,
-            _ => panic!("{:?} is not a valid logical op", tk)
+            _ => panic!("{:?} is not a valid logical op", serde_json::to_string_pretty(&tk).unwrap())
         }
     }
 }
@@ -127,7 +126,7 @@ impl BinOp {
             LESS_EQUAL => BinOp::LESS_EQUAL,
             AND => BinOp::AND,
             OR => BinOp::OR,
-            _ => panic!("{:?} is not a valid binary op", tk)
+            _ => panic!("{:?} is not a valid binary op", serde_json::to_string_pretty(&tk).unwrap())
         }
     }
 }
@@ -137,7 +136,7 @@ impl UnaryOp {
         match tk {
             Token::BANG => UnaryOp::BANG,
             Token::MINUS => UnaryOp::MINUS,
-            _ => panic!("{:?} is not a valid unary op", tk)
+            _ => panic!("{:?} is not a valid unary op", serde_json::to_string_pretty(&tk).unwrap())
         }
     }
 }

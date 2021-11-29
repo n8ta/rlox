@@ -1,8 +1,9 @@
 [package]
 name = "lox"
 version = "0.1.0"
-authors = ["Nathaniel Tracy-Amoroso <nathanielt@microsoft.com>"]
+authors = ["Nathaniel Tracy-Amoroso <natetracyamoroso@gmail.com>"]
 edition = "2018"
+
 
 [profile.release]
 debug = true
@@ -11,4 +12,6 @@ debug = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-colored = "2"
+colored = "^2"
+serde_json = "^1.0.60"
+serde = { version = "^1.0.0", features = ["derive", "rc"] }

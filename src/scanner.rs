@@ -14,7 +14,7 @@ impl Debug for dyn Callable {
 
 #[allow(non_camel_case_types)]
 #[allow(dead_code)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq, serde::Serialize, Debug)]
 pub enum Token {
     PLUS,
     MULT,
@@ -53,7 +53,7 @@ pub enum Token {
     EOF,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct TokenInContext {
     pub token: Token,
     pub context: SourceRef,
@@ -65,11 +65,6 @@ impl PartialEq<TokenInContext> for Token {
     }
 }
 
-impl Display for TokenInContext {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("{:?}", self.token))
-    }
-}
 
 impl TokenInContext {
     pub fn new(token: Token, offset: usize, len: usize, line: usize, src: Rc<Source>) -> TokenInContext {

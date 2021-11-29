@@ -2,7 +2,7 @@ use std::{env, io};
 use std::process::exit;
 use std::fs::read_to_string;
 use std::io::{BufReader, BufRead};
-
+use serde_json;
 mod scanner;
 mod parser;
 mod source_ref;
@@ -108,6 +108,9 @@ impl Lox {
                 return;
             }
         };
+
+        let pretty = serde_json::to_string_pretty(&ast).unwrap();
+        println!("Ast: \n{}", &pretty);
 
         if let Err(err) = resolve(&mut ast) {
             eprintln!("{}", err);

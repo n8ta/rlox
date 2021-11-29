@@ -7,7 +7,7 @@ use std::fmt::{Debug, Formatter};
 use crate::source_ref::{SourceRef};
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct EnvInner {
     env: HashMap<String, Value>,
     enclosing: Option<Env>,
@@ -27,7 +27,7 @@ impl Debug for Env {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("Env [\n")?;
         for (name, val) in &self.inner.borrow_mut().env {
-            f.write_str(&format!("\t{} => {:?}\n", name, val))?;
+            f.write_str(&format!("\t{} => {:?}\n", name, serde_json::to_string_pretty(&val).unwrap()))?;
         }
         f.write_str("]")
     }

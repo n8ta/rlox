@@ -7,12 +7,13 @@ use crate::runtime::is_equal;
 
 
 /// Fundamental assumption is that cloning a value is a cheap pointer copy
-#[derive(Clone, Debug)]
+#[derive(Clone, serde::Serialize, Debug)]
 pub enum Value {
     STRING(String),
     NUMBER(f64),
     BOOL(bool),
     NIL,
+    #[serde(skip_serializing)]
     FUNC(Rc<dyn Callable>),
     INSTANCE(Instance),
     CLASS(Class),

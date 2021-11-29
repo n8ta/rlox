@@ -4,18 +4,19 @@ use crate::parser::types::{Stmt};
 use std::rc::Rc;
 use crate::resolver::ScopeSize;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, serde::Serialize, Debug)]
 /// Parser Representation of a Func
 pub struct ParserFunc {
     pub inner: Rc<ParserFuncInner>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, serde::Serialize, Debug)]
 pub struct ParserFuncInner {
     pub scope_size: RefCell<Option<ScopeSize>>,
     pub name: String,
     pub args: Vec<(String, SourceRef)>,
     pub body: RefCell<Stmt>,
+    #[serde(skip_serializing)]
     pub name_context: SourceRef,
 }
 impl ParserFuncInner {

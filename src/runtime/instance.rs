@@ -5,7 +5,7 @@ use crate::runtime::value::Value;
 use crate::parser::Class;
 use crate::{Callable, RuntimeException, SourceRef};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, serde::Serialize, Debug)]
 pub struct Instance {
     pub class: Class,
     fields: Rc<RefCell<HashMap<String, Value>>>,

@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use serde::ser::{Error};
+use serde::{Serialize, Serializer};
 use crate::{Callable, SourceRef};
 use crate::parser::{ParserFunc};
 use crate::runtime::func::Func;
@@ -8,16 +10,19 @@ use crate::runtime::instance::Instance;
 use crate::runtime::value::Value;
 use crate::runtime::interpreter::RuntimeException;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, serde::Serialize, Debug)]
 pub struct Class {
     pub inner: Rc<ClassInner>,
+
 }
 
-#[derive(Debug)]
+#[derive(serde::Serialize, Debug)]
 pub struct ClassInner {
     name: String,
+    #[serde(skip_serializing)]
     context: SourceRef,
     pub methods: RefCell<Vec<ParserFunc>>,
+    #[serde(skip_serializing)]
     pub runtime_methods: RefCell<HashMap<String, Func>>,
 }
 

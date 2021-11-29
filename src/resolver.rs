@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use crate::source_ref::{SourceRef};
 use crate::{Callable};
-
+use serde::Serialize;
 pub type ResolverResult = Result<(), ResolverError>;
 
 pub struct ResolverError {
@@ -17,9 +17,11 @@ pub struct ResolverError {
 
 pub type ScopeSize = usize;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Resolved {
+    #[serde(skip_serializing)]
     pub scope: usize,
+    #[serde(skip_serializing)]
     pub offset: usize,
 }
 
