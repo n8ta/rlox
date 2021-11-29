@@ -94,7 +94,7 @@ impl Interpreter {
             Stmt::Print(val) => {
                 println!("{}", self.execute_expr(&val)?);
             }
-            Stmt::Variable(name, value, resolved) => {
+            Stmt::Variable(name, value, resolved, context) => {
                 match value {
                     None => {
                         self.env.declare(resolved.as_ref().unwrap().offset, name, &NIL);

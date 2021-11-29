@@ -200,7 +200,7 @@ impl Parser {
         }
         self.consume(SEMICOLON, "Expected ';' after variable declaration")?;
         if let Token::IDENTIFIER(str) = name.token {
-            return Ok(Stmt::Variable(str.clone(), init, None));
+            return Ok(Stmt::Variable(str.clone(), init, None, name.context));
         }
         Err(self.err(format!("FAILED didnt find a IDENT where expected")))
     }

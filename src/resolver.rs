@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use crate::parser::{ParserFunc, Stmt, ExprTy, Expr};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -30,14 +31,14 @@ enum ClassType {
 
 impl Display for ResolverError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("Resolver Error: {}", &self.message))?;
+        f.write_str(&format!("Resolver Error: {}\n", &self.message))?;
         f.write_str(&format!("{}", self.source))
     }
 }
 
 
 impl ResolverError {
-    pub fn new(message: &str, source: &SourceRef) -> ResolverError { ResolverError { message: message.to_string(), source: source.clone() } }
+    pub fn new(message: String, source: &SourceRef) -> ResolverError { ResolverError { message, source: source.clone() } }
 }
 
 pub fn resolve(prog: &mut Stmt) -> ResolverResult {
@@ -93,9 +94,9 @@ impl Resolver {
         self.scopes.last().unwrap().len()
     }
 
-    fn resolve_local(&mut self, name: &str, resolved: &mut Option<Resolved>) {
+    fn resolve_local(&mut self, name: &str, resolved: &mut Option<Resolved>, context: &SourceRef) -> ResolverResult {
         if self.scopes.len() == 0 {
-            return;
+            return Ok(());
         }
         for i in (0..(self.scopes.len())).rev() {
             if let Some((offset, defined)) = self.scopes[i].get(name) {
@@ -108,6 +109,12 @@ impl Resolver {
                 break;
             }
         }
+        if let None = resolved {
+            if name != "clock" {
+                return Err(ResolverError::new(format!("Variable {} was never defined", name), context));
+            }
+        }
+        Ok(())
         // // println!("Resolving {} at dist {:?}", name, expr);
     }
     fn resolve_stmt(&mut self, stmt: &mut Stmt) -> ResolverResult {
@@ -126,13 +133,13 @@ impl Resolver {
             Stmt::Print(expr) => {
                 self.resolve_expr(expr)?;
             }
-            Stmt::Variable(name, init, resolved) => {
+            Stmt::Variable(name, init, resolved, context) => {
                 self.declare(name);
                 if let Some(expr) = init {
                     self.resolve_expr(expr)?;
                 }
                 self.define(name);
-                self.resolve_local(name, resolved);
+                self.resolve_local(name, resolved, context)?;
             }
             Stmt::If(test, if_branch, else_branch) => {
                 self.resolve_expr(test)?;
@@ -148,7 +155,7 @@ impl Resolver {
             Stmt::Function(func, resolved) => {
                 self.declare(func.name());
                 self.define(func.name());
-                self.resolve_local(func.name(), resolved);
+                self.resolve_local(func.name(), resolved, &func.inner.name_context.clone())?;
                 self.resolve_func(func)?;
             }
             Stmt::Return(expr, _context) => {
@@ -169,7 +176,7 @@ impl Resolver {
                 scope_size.insert(self.last_size());
                 self.end_scope();
                 self.define(class.name());
-                self.resolve_local(class.name(), resolved);
+                self.resolve_local(class.name(), resolved, &class.context())?;
 
                 self.current_class = enclosing;
             }
@@ -194,9 +201,9 @@ impl Resolver {
         match &mut expr.expr {
             Expr::This(resolved) => {
                 if let ClassType::None = self.current_class {
-                    return Err(ResolverError::new("Cannot use `this` outside a class", &expr.context));
+                    return Err(ResolverError::new("Cannot use `this` outside a class".to_string(), &expr.context));
                 }
-                self.resolve_local("this", resolved);
+                self.resolve_local("this", resolved, &expr.context)?;
             }
             Expr::Binary(left, _op, right) => {
                 self.resolve_expr(left)?;
@@ -219,15 +226,15 @@ impl Resolver {
                 if let Some(scope) = self.scopes.last() {
                     if let Some((_offset, defined)) = scope.get(var) {
                         if !defined {
-                            return Err(ResolverError::new("Can't read local variable in its own initializer.", &expr.context));
+                            return Err(ResolverError::new("Can't read local variable in its own initializer.".to_string(), &expr.context));
                         }
                     }
                 }
-                self.resolve_local(var, resolved);
+                self.resolve_local(var, resolved, &expr.context)?;
             }
             Expr::Assign(name, value, resolved) => {
                 self.resolve_expr(value)?;
-                self.resolve_local(name, resolved);
+                self.resolve_local(name, resolved, &expr.context)?;
             }
             Expr::Logical(left, _op, right) => {
                 self.resolve_expr(left)?;
