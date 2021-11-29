@@ -3,6 +3,7 @@ use crate::scanner::Token::{MINUS, AND, OR, GREATER, GREATER_EQUAL, LESS, LESS_E
 use crate::source_ref::SourceRef;
 use std::fmt::{Debug, Formatter};
 use crate::parser::{Class, ParserFunc};
+use crate::resolver::Resolved;
 
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -72,10 +73,10 @@ pub enum Expr {
     Literal(crate::runtime::Value),
     Unary(UnaryOp, ExprTy),
     Set(ExprTy, String, ExprTy),
-    Variable(String),
-    Assign(String, ExprTy),
+    Variable(String, Option<Resolved>),
+    Assign(String, ExprTy, Option<Resolved>),
     Logical(ExprTy, LogicalOp, ExprTy),
-    This,
+    This(Option<Resolved>),
 }
 
 #[allow(non_camel_case_types)]

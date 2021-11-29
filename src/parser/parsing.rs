@@ -235,8 +235,8 @@ impl Parser {
             let value: ExprTy = self.assignment()?;
 
 
-            if let Expr::Variable(lit) = expr.expr {
-                return Ok(mk_expr(Expr::Assign(lit, value.clone()),
+            if let Expr::Variable(lit, _resolved) = expr.expr {
+                return Ok(mk_expr(Expr::Assign(lit, value.clone(), None),
                                   expr.context.merge(&value.context)));
             } else if let Expr::Get(get_expr, field) = expr.expr {
                 return Ok(mk_expr(Expr::Set(get_expr, field, value), expr.context));
@@ -485,12 +485,12 @@ impl Parser {
             panic!("Also shouldn't happen. something wrong with matches function");
         }
         if self.matches(vec![Token::THIS]) {
-            return Ok(mk_expr(Expr::This, self.previous().unwrap().context));
+            return Ok(mk_expr(Expr::This(None), self.previous().unwrap().context));
         }
 
         if self.matches(vec![Token::IDENTIFIER(format!(""))]) {
             if let Token::IDENTIFIER(str) = self.previous().unwrap().token {
-                return Ok(mk_expr(Expr::Variable(str.clone()), self.previous().unwrap().context));
+                return Ok(mk_expr(Expr::Variable(str.clone(), None), self.previous().unwrap().context));
             }
             panic!("Here be dragons");
         }

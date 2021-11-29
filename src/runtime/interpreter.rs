@@ -10,6 +10,7 @@ use crate::runtime::Value;
 use crate::Value::NIL;
 use crate::Callable;
 use crate::LoxControlFlow::CFRuntime;
+use crate::resolver::Resolved;
 
 #[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord)]
 pub struct RuntimeException {
@@ -141,8 +142,8 @@ impl Interpreter {
 
     fn execute_expr(&mut self, expr: &ExprTy) -> InterpreterResult {
         match &expr.expr {
-            Expr::This => {
-                self.lookup_variable("this", expr.scope, &expr.context)
+            Expr::This(resolved) => {
+                self.lookup_variable("this", resolved, &expr.context)
             }
             Expr::Binary(left, op, right) => {
                 let context = left.context.merge(&right.context);
@@ -197,17 +198,17 @@ impl Interpreter {
                     }
                 }
             }
-            Expr::Variable(var) => {
-                if let Some(distance) = expr.scope {
-                    println!("Getting {} from locals", var);
+            Expr::Variable(var, resolved) => {
+                if let Some(resolution) = resolved {
+                    // println!("Getting {} from locals", var);
                     // println!("/{} at dist {}", var, distance);
-                    self.env.get_at(distance, &var, &expr.context).or_else(|r| r.into())
+                    self.env.get_at(resolution.scope, &var, &expr.context).or_else(|r| r.into())
                 } else {
-                    println!("Getting {} from globals", var);
+                    // println!("Getting {} from globals", var);
                     self.globals.fetch(&var, &expr.context).or_else(|r| r.into())
                 }
             }
-            Expr::Assign(var, new_val) => {
+            Expr::Assign(var, new_val, _resolved) => {
                 let value = self.execute_expr(&new_val)?;
                 // println!("Assigning {} as {}", var, value);
                 self.env.assign(&var, &value, &expr.context)?;
@@ -259,9 +260,9 @@ impl Interpreter {
         }
     }
 
-    fn lookup_variable(&self, name: &str, scope: Option<usize>, context: &SourceRef) -> InterpreterResult {
-        let res = if let Some(dist) = scope {
-            self.env.get_at(dist, name, context)
+    fn lookup_variable(&self, name: &str, scope: &Option<Resolved>, context: &SourceRef) -> InterpreterResult {
+        let res = if let Some(resolved) = scope {
+            self.env.get_at(resolved.scope, name, context)
         } else {
             self.globals.fetch(name, context).into()
         };

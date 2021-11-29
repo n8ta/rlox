@@ -13,6 +13,12 @@ pub struct ResolverError {
     source: SourceRef,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct Resolved {
+    pub scope: usize,
+    pub offset: usize,
+}
+
 #[derive(Copy, Clone, Debug)]
 enum ClassType {
     None,
@@ -69,13 +75,19 @@ impl Resolver {
         }
     }
 
-    fn resolve_local(&mut self, expr: &mut Option<usize>, name: &str) {
+    fn resolve_local(&mut self, name: &str, resolved: &mut Option<Resolved>) {
+        let mut res = Resolved {
+            scope: 0,
+            offset: 0
+        };
         if self.scopes.len() == 0 {
             return;
         }
         for i in (0..(self.scopes.len())).rev() {
             if self.scopes[i].contains_key(name) {
-                expr.insert((self.scopes.len() - 1) - i);
+                res.scope = (self.scopes.len() - 1) - i;
+                res.offset = 0;
+                resolved.insert(res);
                 break;
             }
         }
@@ -155,31 +167,31 @@ impl Resolver {
         Ok(())
     }
     fn resolve_expr(&mut self, expr: &mut ExprTy) -> ResolverResult {
-        match (&mut expr.expr, &mut expr.scope) {
-            (Expr::This, scope) => {
+        match &mut expr.expr {
+            Expr::This(resolved) => {
                 if let ClassType::None = self.current_class {
                     return Err(ResolverError::new("Cannot use `this` outside a class", &expr.context));
                 }
-                self.resolve_local(scope, "this");
+                self.resolve_local("this", resolved);
             }
-            (Expr::Binary(left, _op, right), _) => {
+            Expr::Binary(left, _op, right) => {
                 self.resolve_expr(left)?;
                 self.resolve_expr(right)?;
             }
-            (Expr::Call(callee, args), _) => {
+            Expr::Call(callee, args) => {
                 self.resolve_expr(callee)?;
                 for expr in args {
                     self.resolve_expr(expr)?;
                 }
             }
-            (Expr::Grouping(group), _) => {
+            Expr::Grouping(group) => {
                 self.resolve_expr(group)?;
             }
-            (Expr::Literal(_), _) => {}
-            (Expr::Unary(_op, expr), _) => {
+            Expr::Literal(_) => {}
+            Expr::Unary(_op, expr) => {
                 self.resolve_expr(expr)?;
             }
-            (Expr::Variable(var), scope) => {
+            Expr::Variable(var, resolved) => {
                 if let Some(scope) = self.scopes.last() {
                     if let Some(bool) = scope.get(var) {
                         if !bool {
@@ -188,20 +200,20 @@ impl Resolver {
                     }
                 }
                 // println!("Resolve {}", var,);
-                self.resolve_local(scope, var);
+                self.resolve_local(var, resolved);
             }
-            (Expr::Assign(name, value), scope) => {
+            Expr::Assign(name, value, resolved) => {
                 self.resolve_expr(value)?;
-                self.resolve_local(scope, name);
+                self.resolve_local(name, resolved);
             }
-            (Expr::Logical(left, _op, right), _) => {
+            Expr::Logical(left, _op, right) => {
                 self.resolve_expr(left)?;
                 self.resolve_expr(right)?;
             }
-            (Expr::Get(expr, _getter_name), _) => {
+            Expr::Get(expr, _getter_name) => {
                 self.resolve_expr(expr)?;
             }
-            (Expr::Set(left, _field, right), _) => {
+            Expr::Set(left, _field, right) => {
                 self.resolve_expr(left)?;
                 self.resolve_expr(right)?;
             }
