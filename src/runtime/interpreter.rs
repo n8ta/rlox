@@ -199,9 +199,11 @@ impl Interpreter {
             }
             Expr::Variable(var) => {
                 if let Some(distance) = expr.scope {
+                    println!("Getting {} from locals", var);
                     // println!("/{} at dist {}", var, distance);
                     self.env.get_at(distance, &var, &expr.context).or_else(|r| r.into())
                 } else {
+                    println!("Getting {} from globals", var);
                     self.globals.fetch(&var, &expr.context).or_else(|r| r.into())
                 }
             }
