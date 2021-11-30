@@ -13,14 +13,12 @@ mod runtime;
 use scanner::scanner;
 use crate::parser::parse;
 use crate::runtime::interpreter::{interpret, RuntimeException, LoxControlFlow};
-use crate::runtime::environment::Env;
 use std::rc::Rc;
 use crate::source_ref::{Source, SourceRef};
 use crate::runtime::{Callable, Value};
 use std::time::{SystemTime, UNIX_EPOCH};
 use crate::resolver::{resolve};
 use crate::runtime::fast_env::FastEnv;
-
 
 #[derive(Clone, Debug)]
 struct ClockRuntimeFunc {}
@@ -41,7 +39,6 @@ impl Callable for ClockRuntimeFunc {
 
 struct Lox {
     had_error: bool,
-    env: FastEnv,
     globals: FastEnv,
     src: Rc<Source>,
 }
@@ -56,7 +53,6 @@ impl Lox {
             src: Rc::new(Source::new(String::new())),
             had_error: false,
             globals: globals.clone(),
-            env: FastEnv::new(Some(globals), 0),
         };
     }
     fn main(&mut self, args: Vec<String>) {
@@ -110,14 +106,14 @@ impl Lox {
         };
 
         let pretty = serde_json::to_string_pretty(&ast).unwrap();
-        println!("Ast: \n{}", &pretty);
+        // println!("Ast: \n{}", &pretty);
 
         if let Err(err) = resolve(&mut ast) {
             eprintln!("{}", err);
             return;
         }
 
-        if let Err(err) = interpret(&ast, self.globals.clone(), self.globals.clone()) {
+        if let Err(err) = interpret(&ast, FastEnv::new(None, 0), self.globals.clone()) {
             match err {
                 LoxControlFlow::CFRuntime(err) => {
                     eprintln!("[line:{}] Error: {}\n{}", err.context.line + 1, &err.msg, err.context)

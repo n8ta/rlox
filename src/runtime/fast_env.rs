@@ -56,4 +56,10 @@ impl FastEnv {
             }
         }
     }
+    pub fn len(&self) -> usize {
+        self.inner.borrow().values.len()
+    }
+    pub fn parent(&self) -> Option<FastEnv> {
+        self.inner.borrow().parent.clone()
+    }
 }

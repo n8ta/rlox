@@ -3,7 +3,6 @@ pub use crate::runtime::value::Value;
 pub use crate::runtime::instance::Instance;
 pub use crate::source_ref::SourceRef;
 
-pub(crate) mod environment;
 pub(crate) mod interpreter;
 pub(crate) mod value;
 pub(crate) mod func;

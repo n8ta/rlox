@@ -5,12 +5,13 @@ use crate::runtime::fast_env::FastEnv;
 use std::rc::Rc;
 use crate::runtime::{is_equal};
 use std::fmt::{Debug};
+use std::panic::resume_unwind;
 use crate::runtime::func::Func;
 use crate::runtime::Value;
 use crate::Value::NIL;
 use crate::Callable;
 use crate::LoxControlFlow::CFRuntime;
-use crate::resolver::Resolved;
+use crate::resolver::{Resolved, ScopeSize};
 
 #[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord)]
 pub struct RuntimeException {
@@ -41,7 +42,7 @@ fn is_num(lit: Value, context: &SourceRef) -> Result<f64, RuntimeException> {
     if let Value::NUMBER(num) = lit {
         Ok(num)
     } else {
-        Err(RuntimeException::new(format!("Expected a number found {:?}", serde_json::to_string_pretty(&lit).unwrap()), context.clone()))
+        Err(RuntimeException::new(format!("Expected a number found {}", lit.tname()), context.clone()))
     }
 }
 
@@ -62,7 +63,37 @@ impl Into<InterpreterResult> for RuntimeException {
 }
 
 impl Interpreter {
+    fn print_envs(&self) {
+        let mut i = 0;
+        let mut curr: Option<FastEnv> = Some(self.env.clone());
+        while let Some(env) = curr {
+            println!("[{}] {}", i, env.len());
+            curr = env.parent();
+            i += 1;
+        }
+    }
+
     fn new(env: FastEnv, globals: FastEnv) -> Interpreter { Interpreter { env, globals } }
+
+    fn interpret_block(&mut self, block_stmts: &Box<Vec<Stmt>>,
+                       scope_size: ScopeSize,
+                       reusable_env: Option<FastEnv>)
+                       -> Result<FastEnv, LoxControlFlow> {
+        let parent = self.env.clone();
+        let new_env = if let Some(env) = reusable_env {
+            env
+        } else {
+            FastEnv::new(Some(parent.clone()), scope_size)
+        };
+
+        self.env = new_env.clone();
+
+        for stmt in block_stmts.iter() {
+            self.interpret(stmt)?;
+        }
+        self.env = parent;
+        Ok(new_env)
+    }
 
     fn interpret(&mut self, stmt: &Stmt) -> InterpreterResult {
         match stmt {
@@ -78,15 +109,7 @@ impl Interpreter {
                 self.env.assign(class.name(), resolution.scope, resolution.offset, &class_runtime, &class.context())?;
             }
             Stmt::Block(block_stmts, scope_size) => {
-                let parent = self.env.clone();
-                let new_scope = FastEnv::new(Some(parent.clone()), scope_size.unwrap());
-                self.env = new_scope;
-                let mut res: InterpreterResult = Ok(Value::NIL);
-                for stmt in block_stmts.iter() {
-                    res = Ok(self.interpret(stmt)?);
-                }
-                self.env = parent;
-                res?;
+                self.interpret_block(block_stmts, scope_size.unwrap(), None)?;
             }
             Stmt::Expr(expr) => {
                 self.execute_expr(&expr)?;
@@ -114,9 +137,12 @@ impl Interpreter {
                     self.interpret(else_branch)?;
                 }
             }
-            Stmt::While(test, body) => {
+            Stmt::While(test, body, scope_size) => {
+                let mut reusable_env: Option<FastEnv> = None;
                 while self.execute_expr(&test)?.truthy() {
-                    self.interpret(&*body)?;
+                    reusable_env = Some(
+                        self.interpret_block(body, scope_size.unwrap(), reusable_env)?
+                    );
                 }
             }
             Stmt::Function(func, resolved) => {
@@ -199,13 +225,16 @@ impl Interpreter {
                 }
             }
             Expr::Variable(var, resolved) => {
+                // println!("Getting {} at resolved {:?}", var, resolved);
+                // self.print_envs();
+
                 if let Some(resolution) = resolved {
-                    // println!("Getting {} from locals", var);
+
                     // println!("/{} at dist {}", var, distance);
                     self.env.fetch(var, resolved.as_ref().unwrap().scope, resolved.as_ref().unwrap().offset, &expr.context).or_else(|r| r.into())
                     // self.env.get_at(resolution.scope, &var, &expr.context).or_else(|r| r.into())
                 } else {
-                    // println!("Getting {} from globals", var);
+                    println!("Getting {} from globals", var);
                     self.globals.fetch("clock", 0, 0, &expr.context).or_else(|r| r.into())
                 }
             }

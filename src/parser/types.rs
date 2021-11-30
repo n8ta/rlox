@@ -49,7 +49,7 @@ pub enum Stmt {
     Print(ExprTy),
     Variable(String, Option<ExprTy>, Option<Resolved>, SourceRef),
     If(ExprTy, Box<Stmt>, Option<Box<Stmt>>),
-    While(ExprTy, Box<Stmt>),
+    While(ExprTy, Box<Vec<Stmt>>, Option<ScopeSize>),
     Function(ParserFunc, Option<Resolved>),
     Return(Option<ExprTy>, SourceRef),
     Class(Class, Option<Resolved>, Option<ScopeSize>),

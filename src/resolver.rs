@@ -129,7 +129,7 @@ impl Resolver {
                 for stmt in stmts.iter_mut() {
                     self.resolve(stmt)?;
                 }
-                scope_size.insert(self.scopes.last_mut().unwrap().len());
+                scope_size.insert(self.last_size());
                 self.end_scope();
             }
             Stmt::Print(expr) => {
@@ -150,9 +150,15 @@ impl Resolver {
                     self.resolve(else_branch)?;
                 }
             }
-            Stmt::While(test, body) => {
+            Stmt::While(test, body, scope_size) => {
                 self.resolve_expr(test)?;
-                self.resolve_stmt(body)?;
+
+                self.begin_scope();
+                for stmt in body.iter_mut() {
+                    self.resolve_stmt(stmt)?;
+                }
+                scope_size.insert(self.last_size());
+                self.end_scope();
             }
             Stmt::Function(func, resolved) => {
                 self.declare(func.name());

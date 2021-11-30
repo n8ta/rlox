@@ -1,7 +1,6 @@
 use std::rc::Rc;
 use crate::{Callable, SourceRef};
 use crate::parser::ParserFunc;
-use crate::runtime::environment::Env;
 use crate::runtime::fast_env::FastEnv;
 use crate::runtime::Instance;
 use crate::runtime::interpreter::{interpret, LoxControlFlow, RuntimeException};
