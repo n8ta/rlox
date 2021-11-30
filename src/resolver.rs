@@ -153,12 +153,10 @@ impl Resolver {
             Stmt::While(test, body, scope_size) => {
                 self.resolve_expr(test)?;
 
-                self.begin_scope();
-                for stmt in body.iter_mut() {
-                    self.resolve_stmt(stmt)?;
-                }
+                // self.begin_scope();
+                self.resolve_stmt(body)?;
                 scope_size.insert(self.last_size());
-                self.end_scope();
+                // self.end_scope();
             }
             Stmt::Function(func, resolved) => {
                 self.declare(func.name());

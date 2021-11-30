@@ -287,7 +287,7 @@ impl Parser {
         let expr = self.expression()?;
         self.consume(Token::RPAREN, "Expected ')' after while condition")?;
         let body = self.statement()?;
-        Ok(Stmt::While(expr, Box::new(vec![body]), None))
+        Ok(Stmt::While(expr, Box::new(body), None))
     }
 
     fn if_statement(&mut self) -> Result<Stmt, ParserError> {
@@ -329,7 +329,7 @@ impl Parser {
         if condition.is_none() {
             condition = Some(Box::new(ExprInContext::new(Expr::Literal(Value::BOOL(true)), src)));
         }
-        body = Stmt::While(condition.unwrap(), Box::new(vec![body]), None);
+        body = Stmt::While(condition.unwrap(), Box::new(body), None);
         if let Some(init) = init {
             body = Stmt::Block(Box::new(vec![init, body]), None)
         }

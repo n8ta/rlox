@@ -1,3 +1,6 @@
 .idea
+flamegraph.svg
+main.py
+main.c
 target
 .DS_Store

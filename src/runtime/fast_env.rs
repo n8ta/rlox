@@ -31,7 +31,6 @@ impl FastEnv {
         } else {
             panic!("Compiler error - resolution error: len {}, offset: {}, name: {}", inner.values.len(), key, name)
         }
-
     }
     pub fn assign(&mut self, key: &str, scope: usize, offset: usize, value: &Value, context: &SourceRef) -> Result<(), RuntimeException> {
         let mut inner = self.inner.borrow_mut();
@@ -52,7 +51,7 @@ impl FastEnv {
         } else {
             match &inner.parent {
                 None => Err(RuntimeException::new(format!("Cannot assign to {} it hasn't been declared", key), context.clone())),
-                Some(enclosing) => enclosing.fetch(key, scope -1 , offset, context)
+                Some(enclosing) => enclosing.fetch(key, scope - 1, offset, context)
             }
         }
     }

@@ -75,26 +75,6 @@ impl Interpreter {
 
     fn new(env: FastEnv, globals: FastEnv) -> Interpreter { Interpreter { env, globals } }
 
-    fn interpret_block(&mut self, block_stmts: &Box<Vec<Stmt>>,
-                       scope_size: ScopeSize,
-                       reusable_env: Option<FastEnv>)
-                       -> Result<FastEnv, LoxControlFlow> {
-        let parent = self.env.clone();
-        let new_env = if let Some(env) = reusable_env {
-            env
-        } else {
-            FastEnv::new(Some(parent.clone()), scope_size)
-        };
-
-        self.env = new_env.clone();
-
-        for stmt in block_stmts.iter() {
-            self.interpret(stmt)?;
-        }
-        self.env = parent;
-        Ok(new_env)
-    }
-
     fn interpret(&mut self, stmt: &Stmt) -> InterpreterResult {
         match stmt {
             Stmt::Class(class, resolution, scope_size) => {
@@ -109,7 +89,14 @@ impl Interpreter {
                 self.env.assign(class.name(), resolution.scope, resolution.offset, &class_runtime, &class.context())?;
             }
             Stmt::Block(block_stmts, scope_size) => {
-                self.interpret_block(block_stmts, scope_size.unwrap(), None)?;
+                let parent = self.env.clone();
+                let new_env = FastEnv::new(Some(parent.clone()), scope_size.unwrap());
+                self.env = new_env.clone();
+
+                for stmt in block_stmts.iter() {
+                    self.interpret(stmt)?;
+                }
+                self.env = parent;
             }
             Stmt::Expr(expr) => {
                 self.execute_expr(&expr)?;
@@ -138,11 +125,8 @@ impl Interpreter {
                 }
             }
             Stmt::While(test, body, scope_size) => {
-                let mut reusable_env: Option<FastEnv> = None;
                 while self.execute_expr(&test)?.truthy() {
-                    reusable_env = Some(
-                        self.interpret_block(body, scope_size.unwrap(), reusable_env)?
-                    );
+                    self.interpret(body);
                 }
             }
             Stmt::Function(func, resolved) => {
@@ -225,23 +209,15 @@ impl Interpreter {
                 }
             }
             Expr::Variable(var, resolved) => {
-                // println!("Getting {} at resolved {:?}", var, resolved);
-                // self.print_envs();
-
                 if let Some(resolution) = resolved {
-
-                    // println!("/{} at dist {}", var, distance);
                     self.env.fetch(var, resolved.as_ref().unwrap().scope, resolved.as_ref().unwrap().offset, &expr.context).or_else(|r| r.into())
-                    // self.env.get_at(resolution.scope, &var, &expr.context).or_else(|r| r.into())
                 } else {
-                    println!("Getting {} from globals", var);
                     self.globals.fetch("clock", 0, 0, &expr.context).or_else(|r| r.into())
                 }
             }
             Expr::Assign(var, new_val, resolved) => {
                 let resolved = resolved.as_ref().unwrap();
                 let value = self.execute_expr(&new_val)?;
-                // println!("Assigning {} as {}", var, value);
                 self.env.assign(&var, resolved.scope, resolved.offset, &value, &expr.context)?;
                 Ok(Value::NIL)
             }
