@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use crate::source_ref::{SourceRef};
 use crate::{Callable, StringInContext};
-use serde::Serialize;
 
 pub type ResolverResult = Result<(), ResolverError>;
 
@@ -73,7 +72,7 @@ impl Resolver {
         let last_size = self.last_size();
         if let Some(scope) = self.scopes.last_mut() {
             let size = match scope.get(&name.string) {
-                None =>  last_size,
+                None => last_size,
                 Some((offset, _bool)) => *offset,
             };
             scope.insert(name.string.to_string(), (size, false));
@@ -88,7 +87,6 @@ impl Resolver {
                 Some((offset, _)) => (*offset, true),
             };
             scope.insert(name.string.to_string(), (size, bool));
-
         }
     }
 
@@ -170,9 +168,22 @@ impl Resolver {
                 }
             }
             Stmt::Class(class, resolved, scope_size) => {
+
+                if let Some(super_class) = &class.inner.super_class {
+                    if super_class.borrow().name == class.name().string {
+                        return Err(ResolverError::new(format!("Class {} cannot inherit from itself", super_class.borrow().name), &class.context()));
+                    }
+                }
+
                 let enclosing = self.current_class.clone();
                 self.current_class = ClassType::Class;
                 self.declare(&class.name().clone());
+
+                if let Some(super_class_ref_cell) = &class.inner.super_class {
+                    let mut ref_mut = super_class_ref_cell.borrow_mut();
+                    self.resolve_expr(&mut ref_mut.parent)?;
+                }
+
                 self.begin_scope();
                 let last = self.scopes.last_mut().unwrap();
                 last.insert("this".to_string(), (last.len(), true));
@@ -182,6 +193,7 @@ impl Resolver {
                 scope_size.insert(self.last_size());
                 self.end_scope();
                 self.define(class.name());
+
                 self.resolve_local(class.name(), resolved)?;
 
                 self.current_class = enclosing;
@@ -203,6 +215,7 @@ impl Resolver {
         self.end_scope();
         Ok(())
     }
+
     fn resolve_expr(&mut self, expr: &mut ExprTy) -> ResolverResult {
         match &mut expr.expr {
             Expr::This(resolved) => {

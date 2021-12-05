@@ -1,9 +1,11 @@
+use std::cell::RefCell;
 use crate::scanner::{StringInContext, Token, TokenInContext};
 use crate::scanner::Token::{GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, SLASH, MULT, LITERAL, LPAREN, RPAREN, BANG_EQUAL, EQUAL_EQUAL, VAR, SEMICOLON, LBRACE};
 use crate::source_ref::{Source, SourceRef};
 use std::rc::Rc;
 use crate::parser::types::{Tokens, Stmt, ParserError, ExprTy, LogicalOp, ExprInContext, Expr, UnaryOp, ExprResult, BinOp, Variable};
 use crate::parser::{ParserFunc, Class};
+use crate::parser::class::SuperClass;
 use crate::runtime::Value;
 
 pub fn parse(tokens: Tokens, source: Rc<Source>) -> Result<Stmt, ParserError> {
@@ -148,12 +150,14 @@ impl Parser {
             panic!("Compiler bug");
         };
 
-        let mut super_class: Option<Variable> = None;
+        let mut super_class: Option<RefCell<SuperClass>> = None;
         if self.matches(vec![Token::LESS]) {
-            self.consume(Token::IDENTIFIER(StringInContext::simple()), "Expected to a super class name after a '<'");
+            self.consume(Token::IDENTIFIER(StringInContext::simple()), "Expected to a super class name after a '<'")?;
             let var = self.previous().unwrap();
             if let Token::IDENTIFIER(context) = var.token {
-                super_class = Some(Variable::new(context, None));
+                let expr_ty = Box::new(ExprInContext::new(Expr::Variable(Variable::new(context.clone(), None)),
+                                                          context.context.clone()));
+                super_class = Some(RefCell::new(SuperClass::new(expr_ty, context.string.clone())));
             } else {
                 panic!("Compiler bug");
             }
