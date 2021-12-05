@@ -17,7 +17,7 @@ pub struct ResolverError {
 
 pub type ScopeSize = usize;
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, PartialOrd, PartialEq, Debug, serde::Serialize)]
 pub struct Resolved {
     #[serde(skip_serializing)]
     pub scope: usize,
@@ -228,15 +228,15 @@ impl Resolver {
             Expr::Unary(_op, expr) => {
                 self.resolve_expr(expr)?;
             }
-            Expr::Variable(var, resolved) => {
+            Expr::Variable(var) => {
                 if let Some(scope) = self.scopes.last() {
-                    if let Some((_offset, defined)) = scope.get(&var.string) {
+                    if let Some((_offset, defined)) = scope.get(&var.name.string) {
                         if !defined {
                             return Err(ResolverError::new("Can't read local variable in its own initializer.".to_string(), &expr.context));
                         }
                     }
                 }
-                self.resolve_local(var, resolved)?;
+                self.resolve_local(&var.name, &mut var.resolved)?;
             }
             Expr::Assign(name, value, resolved) => {
                 self.resolve_expr(value)?;

@@ -208,9 +208,13 @@ impl Interpreter {
                     }
                 }
             }
-            Expr::Variable(var, resolved) => {
-                if let Some(_resolution) = resolved {
-                    self.env.fetch(&var.string, resolved.as_ref().unwrap().scope, resolved.as_ref().unwrap().offset, &expr.context).or_else(|r| r.into())
+            Expr::Variable(var) => {
+                if let Some(resolution) = &var.resolved {
+                    self.env.fetch(&var.name.string,
+                                   resolution.scope,
+                                   resolution.offset,
+                                   &expr.context)
+                        .or_else(|r| r.into())
                 } else {
                     self.globals.fetch("clock", 0, 0, &expr.context).or_else(|r| r.into())
                 }

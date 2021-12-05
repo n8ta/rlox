@@ -6,7 +6,8 @@ use std::rc::Rc;
 use crate::{Callable, Value};
 
 
-#[derive(Clone, PartialEq, serde::Serialize, Debug)]
+
+#[derive(Clone, PartialOrd, PartialEq, Debug, serde::Serialize)]
 pub struct StringInContext {
     pub string: String,
     pub context: SourceRef,

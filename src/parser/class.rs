@@ -2,7 +2,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use crate::{Callable, SourceRef};
-use crate::parser::{ParserFunc};
+use crate::parser::{Expr, ParserFunc};
+use crate::parser::types::Variable;
 use crate::runtime::func::Func;
 use crate::runtime::instance::Instance;
 use crate::runtime::value::Value;
@@ -18,19 +19,18 @@ pub struct Class {
 #[derive(serde::Serialize, Debug)]
 pub struct ClassInner {
     name: StringInContext,
-    #[serde(skip_serializing)]
-    context: SourceRef,
     pub methods: RefCell<Vec<ParserFunc>>,
     #[serde(skip_serializing)]
     pub runtime_methods: RefCell<HashMap<String, Func>>,
+    pub super_class: Option<Variable>,
 }
 
 impl Class {
-    pub fn new(name: StringInContext, context: SourceRef, methods: Vec<ParserFunc>) -> Class {
-        Class { inner: Rc::new(ClassInner { name, context, methods: RefCell::new(methods), runtime_methods: RefCell::new(HashMap::new()) }) }
+    pub fn new(name: StringInContext, methods: Vec<ParserFunc>, super_class: Option<Variable>) -> Class {
+        Class { inner: Rc::new(ClassInner { super_class, name, methods: RefCell::new(methods), runtime_methods: RefCell::new(HashMap::new()) }) }
     }
     pub fn context(&self) -> SourceRef {
-        self.inner.context.clone()
+        self.inner.name.context.clone()
     }
 }
 

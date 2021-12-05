@@ -2,7 +2,7 @@ use crate::scanner::{StringInContext, Token, TokenInContext};
 use crate::scanner::Token::{GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, SLASH, MULT, LITERAL, LPAREN, RPAREN, BANG_EQUAL, EQUAL_EQUAL, VAR, SEMICOLON, LBRACE};
 use crate::source_ref::{Source, SourceRef};
 use std::rc::Rc;
-use crate::parser::types::{Tokens, Stmt, ParserError, ExprTy, LogicalOp, ExprInContext, Expr, UnaryOp, ExprResult, BinOp};
+use crate::parser::types::{Tokens, Stmt, ParserError, ExprTy, LogicalOp, ExprInContext, Expr, UnaryOp, ExprResult, BinOp, Variable};
 use crate::parser::{ParserFunc, Class};
 use crate::runtime::Value;
 
@@ -53,7 +53,7 @@ impl Parser {
     fn consume(&mut self, typ: Token, message: &str) -> Result<TokenInContext, ParserError> {
         if self.check(typ.clone()) { return Ok(self.advance()); }
         Err(ParserError::new(
-            format!("{} - didn't find a {:?} as expected. Found a {:?}",
+            format!("{} - didn't find a {} as expected. Found a {}",
                     message,
                     serde_json::to_string_pretty(&typ).unwrap(),
                     serde_json::to_string_pretty(&self.peek().token).unwrap()),
@@ -147,13 +147,25 @@ impl Parser {
         } else {
             panic!("Compiler bug");
         };
+
+        let mut super_class: Option<Variable> = None;
+        if self.matches(vec![Token::LESS]) {
+            self.consume(Token::IDENTIFIER(StringInContext::simple()), "Expected to a super class name after a '<'");
+            let var = self.previous().unwrap();
+            if let Token::IDENTIFIER(context) = var.token {
+                super_class = Some(Variable::new(context, None));
+            } else {
+                panic!("Compiler bug");
+            }
+        }
+
         self.consume(Token::LBRACE, "Expected a '{' before class body")?;
         let mut methods = vec![];
         while !self.check(Token::RBRACE) && !self.is_at_end() {
             methods.push(self.function()?);
         }
         self.consume(Token::RBRACE, "Expected a '}' after class body")?;
-        Ok(Stmt::Class(Class::new(name, name_in_context.context, methods), None, None))
+        Ok(Stmt::Class(Class::new(name, methods, super_class), None, None))
     }
 
     fn function(&mut self) -> Result<ParserFunc, ParserError> {
@@ -240,8 +252,8 @@ impl Parser {
             let _eq = self.previous().unwrap();
             let value: ExprTy = self.assignment()?;
 
-            if let Expr::Variable(lit, _resolved) = expr.expr {
-                return Ok(mk_expr(Expr::Assign(lit, value.clone(), None),
+            if let Expr::Variable(var) = expr.expr {
+                return Ok(mk_expr(Expr::Assign(var.name, value.clone(), None),
                                   expr.context.merge(&value.context)));
             } else if let Expr::Get(get_expr, field) = expr.expr {
                 return Ok(mk_expr(Expr::Set(get_expr, field, value),
@@ -503,7 +515,7 @@ impl Parser {
 
         if self.matches(vec![ident()]) {
             if let Token::IDENTIFIER(str) = self.previous().unwrap().token {
-                return Ok(mk_expr(Expr::Variable(str.clone(), None), self.previous().unwrap().context));
+                return Ok(mk_expr(Expr::Variable(Variable::new(str.clone(), None)), self.previous().unwrap().context));
             }
             panic!("Here be dragons");
         }

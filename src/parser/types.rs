@@ -69,10 +69,20 @@ pub enum Expr {
     Literal(crate::runtime::Value),
     Unary(UnaryOp, ExprTy),
     Set(ExprTy, StringInContext, ExprTy),
-    Variable(StringInContext, Option<Resolved>),
+    Variable(Variable),
     Assign(StringInContext, ExprTy, Option<Resolved>),
     Logical(ExprTy, LogicalOp, ExprTy),
     This(Option<Resolved>),
+}
+
+#[derive(Clone, PartialOrd, PartialEq, Debug, serde::Serialize)]
+pub struct Variable {
+    pub name: StringInContext,
+    pub resolved: Option<Resolved>,
+}
+
+impl Variable {
+    pub fn new(name: StringInContext, resolved: Option<Resolved>) -> Variable { Variable { name, resolved } }
 }
 
 #[allow(non_camel_case_types)]
