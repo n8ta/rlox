@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use crate::source_ref::{SourceRef, Source};
-use std::fmt::{Display, Formatter, Debug};
+use std::fmt::{Formatter, Debug};
 use crate::scanner::Token::IDENTIFIER;
 use std::rc::Rc;
 use crate::{Callable, Value};
@@ -336,6 +336,7 @@ impl Scanner {
 }
 
 // Unwraps scanner result for easy tests
+#[allow(dead_code)]
 fn test_scanner(src: String) -> Vec<TokenInContext> {
     let mut scanner = Scanner::new(Rc::new(Source::new(src)));
     let mut tokens = scanner.scan_tokens().unwrap();

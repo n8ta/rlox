@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use crate::parser::{ParserFunc, Stmt, ExprTy, Expr};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -73,23 +72,23 @@ impl Resolver {
         // // println!("Declare {} at scope {}", name, self.scopes.len() - 1);
         let last_size = self.last_size();
         if let Some(scope) = self.scopes.last_mut() {
-            // println!("declare {} at offset{}", name, last_size);
-            match scope.get(&name.string) {
-                None => scope.insert(name.string.to_string(), (last_size, false)),
-                Some((offset, bool)) => scope.insert(name.string.to_string(), (*offset, false)),
+            let size = match scope.get(&name.string) {
+                None =>  last_size,
+                Some((offset, _bool)) => *offset,
             };
+            scope.insert(name.string.to_string(), (size, false));
         }
     }
     fn define(&mut self, name: &StringInContext) {
         // // println!("Define {} at scope {}", name, self.scopes.len() - 1);
         let last_size = self.last_size();
         if let Some(scope) = self.scopes.last_mut() {
-            // println!("define {} at offset{}", name, last_size);
-            // scope.insert(name.to_string(), (last_size, true));
-            match scope.get(&name.string) {
-                None => scope.insert(name.string.to_string(), (last_size, true)),
-                Some((offset, bool)) => scope.insert(name.string.to_string(), (*offset, true)),
+            let (size, bool) = match scope.get(&name.string) {
+                None => (last_size, true),
+                Some((offset, _)) => (*offset, true),
             };
+            scope.insert(name.string.to_string(), (size, bool));
+
         }
     }
 
@@ -102,7 +101,7 @@ impl Resolver {
             return Ok(());
         }
         for i in (0..(self.scopes.len())).rev() {
-            if let Some((offset, defined)) = self.scopes[i].get(&name.string) {
+            if let Some((offset, _defined)) = self.scopes[i].get(&name.string) {
                 let res = Resolved {
                     scope: (self.scopes.len() - 1) - i,
                     offset: *offset,
@@ -136,7 +135,7 @@ impl Resolver {
             Stmt::Print(expr) => {
                 self.resolve_expr(expr)?;
             }
-            Stmt::Variable(name, init, resolved, context) => {
+            Stmt::Variable(name, init, resolved, _context) => {
                 self.declare(name);
                 if let Some(expr) = init {
                     self.resolve_expr(expr)?;

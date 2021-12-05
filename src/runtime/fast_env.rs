@@ -55,9 +55,11 @@ impl FastEnv {
             }
         }
     }
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.inner.borrow().values.len()
     }
+    #[allow(dead_code)]
     pub fn parent(&self) -> Option<FastEnv> {
         self.inner.borrow().parent.clone()
     }

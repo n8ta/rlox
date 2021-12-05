@@ -2,9 +2,10 @@ class Test {
     init() {
         this.a = "a";
         this.b = "b";
-        this.field = "nate";
+        this.field = "natee";
     }
     printMe(name) {
+        this.field = "nate";
         print("I cant do that " + name + " I am " + this.field);
     }
 }

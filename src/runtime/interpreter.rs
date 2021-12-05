@@ -5,13 +5,12 @@ use crate::runtime::fast_env::FastEnv;
 use std::rc::Rc;
 use crate::runtime::{is_equal};
 use std::fmt::{Debug};
-use std::panic::resume_unwind;
 use crate::runtime::func::Func;
 use crate::runtime::Value;
 use crate::Value::NIL;
 use crate::Callable;
 use crate::LoxControlFlow::CFRuntime;
-use crate::resolver::{Resolved, ScopeSize};
+use crate::resolver::{Resolved};
 
 #[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord)]
 pub struct RuntimeException {
@@ -63,6 +62,7 @@ impl Into<InterpreterResult> for RuntimeException {
 }
 
 impl Interpreter {
+    #[allow(dead_code)]
     fn print_envs(&self) {
         let mut i = 0;
         let mut curr: Option<FastEnv> = Some(self.env.clone());
@@ -77,7 +77,7 @@ impl Interpreter {
 
     fn interpret(&mut self, stmt: &Stmt) -> InterpreterResult {
         match stmt {
-            Stmt::Class(class, resolution, scope_size) => {
+            Stmt::Class(class, resolution, _scope_size) => {
                 let resolution = resolution.as_ref().unwrap();
                 self.env.declare(resolution.offset, &class.name().string, &Value::NIL);
                 let class_runtime = Value::CLASS(class.clone());
@@ -104,13 +104,14 @@ impl Interpreter {
             Stmt::Print(val) => {
                 println!("{}", self.execute_expr(&val)?);
             }
-            Stmt::Variable(name, value, resolved, context) => {
+            Stmt::Variable(name, value, resolved, _context) => {
                 match value {
                     None => {
                         self.env.declare(resolved.as_ref().unwrap().offset, &name.string, &NIL);
                     }
                     Some(lit) => {
                         let value = &self.execute_expr(&lit)?;
+                        // println!("Declaring {} as {}", &name, value);
                         self.env.declare(resolved.as_ref().unwrap().offset, &name.string, value);
                     }
                 };
@@ -123,7 +124,7 @@ impl Interpreter {
                     self.interpret(else_branch)?;
                 }
             }
-            Stmt::While(test, body, scope_size) => {
+            Stmt::While(test, body, _scope_size) => {
                 while self.execute_expr(&test)?.truthy() {
                     self.interpret(body)?;
                 }
@@ -208,7 +209,7 @@ impl Interpreter {
                 }
             }
             Expr::Variable(var, resolved) => {
-                if let Some(resolution) = resolved {
+                if let Some(_resolution) = resolved {
                     self.env.fetch(&var.string, resolved.as_ref().unwrap().scope, resolved.as_ref().unwrap().offset, &expr.context).or_else(|r| r.into())
                 } else {
                     self.globals.fetch("clock", 0, 0, &expr.context).or_else(|r| r.into())

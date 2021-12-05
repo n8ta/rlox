@@ -1,9 +1,7 @@
-use std::process::id;
 use crate::scanner::{StringInContext, Token, TokenInContext};
-use crate::scanner::Token::{GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, SLASH, MULT, LITERAL, LPAREN, RPAREN, BANG_EQUAL, EQUAL_EQUAL, VAR, SEMICOLON, IDENTIFIER, LBRACE};
+use crate::scanner::Token::{GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, SLASH, MULT, LITERAL, LPAREN, RPAREN, BANG_EQUAL, EQUAL_EQUAL, VAR, SEMICOLON, LBRACE};
 use crate::source_ref::{Source, SourceRef};
 use std::rc::Rc;
-use serde::de::Unexpected::Str;
 use crate::parser::types::{Tokens, Stmt, ParserError, ExprTy, LogicalOp, ExprInContext, Expr, UnaryOp, ExprResult, BinOp};
 use crate::parser::{ParserFunc, Class};
 use crate::runtime::Value;
@@ -496,7 +494,7 @@ impl Parser {
         }
         if self.matches(vec![Token::THIS(StringInContext::simple())]) {
             let prev = self.previous().unwrap();
-            if let (Token::THIS(context), src) = (prev.token, prev.context) {
+            if let (Token::THIS(_context), src) = (prev.token, prev.context) {
                 return Ok(mk_expr(Expr::This(None), src));
             } else {
                 panic!("compiler error");

@@ -1,9 +1,7 @@
 use crate::scanner::{StringInContext, Token, TokenInContext};
 use crate::scanner::Token::{MINUS, AND, OR, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, SLASH, MULT, BANG_EQUAL, EQUAL_EQUAL};
 use crate::source_ref::SourceRef;
-use std::fmt::{Debug, Formatter};
-use std::ptr::write;
-use crate::Callable;
+use std::fmt::{Debug};
 use crate::parser::{Class, ParserFunc};
 use crate::resolver::{Resolved, ScopeSize};
 
