@@ -79,14 +79,14 @@ impl Interpreter {
         match stmt {
             Stmt::Class(class, resolution, scope_size) => {
                 let resolution = resolution.as_ref().unwrap();
-                self.env.declare(resolution.offset, class.name(), &Value::NIL);
+                self.env.declare(resolution.offset, &class.name().string, &Value::NIL);
                 let class_runtime = Value::CLASS(class.clone());
                 let mut rt_methods = class.inner.runtime_methods.borrow_mut();
                 for method in class.inner.methods.borrow().iter() {
                     let func = Func::new(method.clone(), self.env.clone(), self.globals.clone());
-                    rt_methods.insert(func.name().to_string(), func);
+                    rt_methods.insert(func.name().string.to_string(), func);
                 }
-                self.env.assign(class.name(), resolution.scope, resolution.offset, &class_runtime, &class.context())?;
+                self.env.assign(&class.name().string, resolution.scope, resolution.offset, &class_runtime, &class.context())?;
             }
             Stmt::Block(block_stmts, scope_size) => {
                 let parent = self.env.clone();
@@ -107,12 +107,11 @@ impl Interpreter {
             Stmt::Variable(name, value, resolved, context) => {
                 match value {
                     None => {
-                        self.env.declare(resolved.as_ref().unwrap().offset, name, &NIL);
+                        self.env.declare(resolved.as_ref().unwrap().offset, &name.string, &NIL);
                     }
                     Some(lit) => {
                         let value = &self.execute_expr(&lit)?;
-                        // println!("Declaring {} as {}", &name, value);
-                        self.env.declare(resolved.as_ref().unwrap().offset, name, value);
+                        self.env.declare(resolved.as_ref().unwrap().offset, &name.string, value);
                     }
                 };
             }
@@ -126,11 +125,11 @@ impl Interpreter {
             }
             Stmt::While(test, body, scope_size) => {
                 while self.execute_expr(&test)?.truthy() {
-                    self.interpret(body);
+                    self.interpret(body)?;
                 }
             }
             Stmt::Function(func, resolved) => {
-                self.env.declare(resolved.as_ref().unwrap().offset, func.name(),
+                self.env.declare(resolved.as_ref().unwrap().offset, &func.name().string,
                                  &Value::FUNC(Rc::new(
                                      Func::new(func.clone(), self.env.clone(), self.globals.clone())
                                  )));
@@ -210,7 +209,7 @@ impl Interpreter {
             }
             Expr::Variable(var, resolved) => {
                 if let Some(resolution) = resolved {
-                    self.env.fetch(var, resolved.as_ref().unwrap().scope, resolved.as_ref().unwrap().offset, &expr.context).or_else(|r| r.into())
+                    self.env.fetch(&var.string, resolved.as_ref().unwrap().scope, resolved.as_ref().unwrap().offset, &expr.context).or_else(|r| r.into())
                 } else {
                     self.globals.fetch("clock", 0, 0, &expr.context).or_else(|r| r.into())
                 }
@@ -218,7 +217,7 @@ impl Interpreter {
             Expr::Assign(var, new_val, resolved) => {
                 let resolved = resolved.as_ref().unwrap();
                 let value = self.execute_expr(&new_val)?;
-                self.env.assign(&var, resolved.scope, resolved.offset, &value, &expr.context)?;
+                self.env.assign(&var.string, resolved.scope, resolved.offset, &value, &expr.context)?;
                 Ok(Value::NIL)
             }
             Expr::Logical(left, op, right) => {
@@ -244,23 +243,25 @@ impl Interpreter {
                     Err(RuntimeException::new(format!("Cannot call a {}", func.tname()), callee.context.clone()).into())
                 }
             }
-            Expr::Get(expr, getter_name) => {
-                let obj = self.execute_expr(expr)?;
+            Expr::Get(get_expr, field) => {
+                let obj = self.execute_expr(get_expr)?;
                 if let Value::INSTANCE(inst) = obj {
-                    inst.get(getter_name, &expr.context).map_err(|e| e.into())
+                    inst.get(&field.string, &expr.context).map_err(|e| e.into())
                 } else {
-                    Err(RuntimeException::new(format!("Cannot use the class.get_property syntax on a non class instance"), expr.context.clone()).into())
+                    Err(RuntimeException::new(
+                        format!("Cannot use the class.get_property syntax on a non class instance"),
+                        expr.context.clone()).into())
                 }
             }
             Expr::Set(left, field, right) => {
                 let lhs = self.execute_expr(left)?;
                 if let Value::INSTANCE(mut inst) = lhs {
                     let rhs = self.execute_expr(right)?;
-                    inst.set(field, rhs.clone());
+                    inst.set(&field.string, rhs.clone());
                     Ok(rhs)
                 } else {
                     Err(LoxControlFlow::CFRuntime(RuntimeException::new(
-                        format!("Cannot assign field {} to a {}", field, lhs.tname()),
+                        format!("Cannot assign field {} to a {}", field.string, lhs.tname()),
                         left.context.merge(&right.context))))
                 }
             }

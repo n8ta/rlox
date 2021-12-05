@@ -1,7 +1,9 @@
-use crate::scanner::{Token, TokenInContext};
+use std::process::id;
+use crate::scanner::{StringInContext, Token, TokenInContext};
 use crate::scanner::Token::{GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, SLASH, MULT, LITERAL, LPAREN, RPAREN, BANG_EQUAL, EQUAL_EQUAL, VAR, SEMICOLON, IDENTIFIER, LBRACE};
 use crate::source_ref::{Source, SourceRef};
 use std::rc::Rc;
+use serde::de::Unexpected::Str;
 use crate::parser::types::{Tokens, Stmt, ParserError, ExprTy, LogicalOp, ExprInContext, Expr, UnaryOp, ExprResult, BinOp};
 use crate::parser::{ParserFunc, Class};
 use crate::runtime::Value;
@@ -12,6 +14,10 @@ pub fn parse(tokens: Tokens, source: Rc<Source>) -> Result<Stmt, ParserError> {
     Ok(v)
 }
 
+
+fn ident() -> Token {
+    Token::IDENTIFIER(StringInContext::simple())
+}
 
 fn mk_expr(expr: Expr, context: SourceRef) -> ExprTy {
     Box::new(ExprInContext::new(expr, context))
@@ -137,7 +143,7 @@ impl Parser {
     }
 
     fn class(&mut self) -> Result<Stmt, ParserError> {
-        let name_in_context = self.consume(Token::IDENTIFIER(format!("")), "Expected a class name")?;
+        let name_in_context = self.consume(Token::IDENTIFIER(StringInContext::new(format!(""), SourceRef::simple())), "Expected a class name")?;
         let name = if let Token::IDENTIFIER(str) = name_in_context.token {
             str
         } else {
@@ -153,7 +159,7 @@ impl Parser {
     }
 
     fn function(&mut self) -> Result<ParserFunc, ParserError> {
-        let name_in_context = self.consume(Token::IDENTIFIER(format!("")), "Expected a function name")?;
+        let name_in_context = self.consume(ident(), "Expected a function name")?;
         let name = if let Token::IDENTIFIER(str) = name_in_context.token { str } else {
             return Err(self.err(format!("Expected a function name")));
         };
@@ -168,11 +174,11 @@ impl Parser {
             if params_untyped.len() >= 255 {
                 return Err(self.err(format!("Cannot have more than 255 parameters.")));
             };
-            params_untyped.push(self.consume(IDENTIFIER(format!("")), "Expected parameter name of function arg")?);
+            params_untyped.push(self.consume(ident(), "Expected parameter name of function arg")?);
         }
 
         // TODO: Make less shit
-        let mut params: Vec<(String, SourceRef)> = vec![];
+        let mut params: Vec<(StringInContext, SourceRef)> = vec![];
         for param in params_untyped {
             if let Token::IDENTIFIER(str) = param.token {
                 params.push((str, param.context))
@@ -194,7 +200,7 @@ impl Parser {
     }
 
     fn variable_declaration(&mut self) -> Result<Stmt, ParserError> {
-        let name = self.consume(Token::IDENTIFIER(format!("")), "Expect variable name.").unwrap();
+        let name = self.consume(ident(), "Expect variable name.").unwrap();
         let mut init: Option<ExprTy> = None;
         if self.matches(vec![Token::EQUAL]) {
             let exp = self.expression()?;
@@ -236,12 +242,12 @@ impl Parser {
             let _eq = self.previous().unwrap();
             let value: ExprTy = self.assignment()?;
 
-
             if let Expr::Variable(lit, _resolved) = expr.expr {
                 return Ok(mk_expr(Expr::Assign(lit, value.clone(), None),
                                   expr.context.merge(&value.context)));
             } else if let Expr::Get(get_expr, field) = expr.expr {
-                return Ok(mk_expr(Expr::Set(get_expr, field, value), expr.context));
+                return Ok(mk_expr(Expr::Set(get_expr, field, value),
+                                  expr.context));
             } else {
                 return Err(self.err(format!("Invalid assignment target:\n{}", expr.context)));
             }
@@ -419,9 +425,11 @@ impl Parser {
             if self.matches(vec![Token::LPAREN]) {
                 expr = self.finish_call(expr)?;
             } else if self.matches(vec![Token::DOT]) {
-                let ident = self.consume(Token::IDENTIFIER(format!("")), "Expected an identifier after a '.'")?;
+                let context = expr.context.clone();
+                let ident = self.consume(Token::IDENTIFIER(StringInContext::new(format!(""), SourceRef::simple())), "Expected an identifier after a '.'")?;
                 if let Token::IDENTIFIER(name) = &ident.token {
-                    expr = Box::new(ExprInContext::new(Expr::Get(expr, name.clone()), ident.context));
+                    let merged_context = ident.context.merge(&context);
+                    expr = Box::new(ExprInContext::new(Expr::Get(expr, name.clone()), merged_context));
                 } else {
                     panic!("Compiler error");
                 }
@@ -486,11 +494,16 @@ impl Parser {
             }
             panic!("Also shouldn't happen. something wrong with matches function");
         }
-        if self.matches(vec![Token::THIS]) {
-            return Ok(mk_expr(Expr::This(None), self.previous().unwrap().context));
+        if self.matches(vec![Token::THIS(StringInContext::simple())]) {
+            let prev = self.previous().unwrap();
+            if let (Token::THIS(context), src) = (prev.token, prev.context) {
+                return Ok(mk_expr(Expr::This(None), src));
+            } else {
+                panic!("compiler error");
+            }
         }
 
-        if self.matches(vec![Token::IDENTIFIER(format!(""))]) {
+        if self.matches(vec![ident()]) {
             if let Token::IDENTIFIER(str) = self.previous().unwrap().token {
                 return Ok(mk_expr(Expr::Variable(str.clone(), None), self.previous().unwrap().context));
             }

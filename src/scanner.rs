@@ -6,9 +6,20 @@ use std::rc::Rc;
 use crate::{Callable, Value};
 
 
+#[derive(Clone, PartialEq, serde::Serialize, Debug)]
+pub struct StringInContext {
+    pub string: String,
+    pub context: SourceRef,
+}
+
+impl StringInContext {
+    pub fn new(string: String, context: SourceRef) -> StringInContext { StringInContext { string, context } }
+    pub fn simple() -> StringInContext { StringInContext { string: format!(""), context: SourceRef::simple() } }
+}
+
 impl Debug for dyn Callable {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("fun<{}>", self.name()))
+        f.write_str(&format!("fun<{}>", self.name().string))
     }
 }
 
@@ -28,7 +39,7 @@ pub enum Token {
     BANG,
     MINUS,
     LITERAL(Value),
-    IDENTIFIER(String),
+    IDENTIFIER(StringInContext),
     SEMICOLON,
     COMMA,
     DOT,
@@ -47,7 +58,7 @@ pub enum Token {
     PRINT,
     RETURN,
     SUPER,
-    THIS,
+    THIS(StringInContext),
     VAR,
     WHILE,
     EOF,
@@ -109,7 +120,7 @@ impl Token {
             (Token::PRINT, Token::PRINT) => true,
             (Token::RETURN, Token::RETURN) => true,
             (Token::SUPER, Token::SUPER) => true,
-            (Token::THIS, Token::THIS) => true,
+            (Token::THIS(_), Token::THIS(_)) => true,
             (Token::VAR, Token::VAR) => true,
             (Token::WHILE, Token::WHILE) => true,
             (Token::EOF, Token::EOF) => true,
@@ -147,7 +158,7 @@ impl Scanner {
         map.insert(String::from("print"), Token::PRINT);
         map.insert(String::from("return"), Token::RETURN);
         map.insert(String::from("super"), Token::SUPER);
-        map.insert(String::from("this"), Token::THIS);
+        map.insert(String::from("this"), Token::THIS(StringInContext::new(format!("this"), SourceRef::simple() )));
         map.insert(String::from("true"), Token::LITERAL(Value::BOOL(true)));
         map.insert(String::from("var"), Token::VAR);
         map.insert(String::from("while"), Token::WHILE);
@@ -169,7 +180,7 @@ impl Scanner {
                 self.start,
                 self.current - self.start,
                 self.line,
-            self.source.clone(),
+                self.source.clone(),
             )
         );
     }
@@ -212,7 +223,10 @@ impl Scanner {
         let fetched: Option<Token> = self.keywords.get(&ident).and_then(|t| Some(t.clone()));
         match fetched {
             Some(k) => self.add_token(k.clone()),
-            None => self.add_token(IDENTIFIER(ident)),
+            None => self.add_token(
+                IDENTIFIER(
+                    StringInContext::new(ident, SourceRef::new(self.start, self.current - self.start, self.line, self.source.clone()))
+                )),
         };
         Ok(())
     }
@@ -368,16 +382,4 @@ fn test_misc() {
     type TT = Token;
     assert_eq!(vec![TT::AND, TT::OR, TT::LITERAL(Value::BOOL(true)), TT::LITERAL(Value::BOOL(false))], test_scanner(String::from("and or true\n false")));
     assert_eq!(vec![TT::LITERAL(Value::NIL), TT::PRINT, TT::RETURN, TT::WHILE], test_scanner(String::from("nil print return while")));
-}
-
-#[test]
-fn test_identifier_and_assign() {
-    type TT = Token;
-
-    assert_eq!(vec![TT::VAR, TT::IDENTIFIER("Hello".to_string()), TT::SEMICOLON],
-               test_scanner(format!("var Hello;")));
-
-    let hello = TT::IDENTIFIER("Hello".to_string());
-    assert_eq!(vec![TT::VAR, TT::IDENTIFIER("Hello".to_string()), TT::SEMICOLON, hello.clone(), TT::EQUAL, hello.clone(), TT::PLUS, TT::LITERAL(Value::NUMBER(1.0)), TT::SEMICOLON],
-               test_scanner(format!("var Hello;\nHello = Hello + 1;")));
 }

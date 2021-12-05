@@ -1,6 +1,7 @@
 pub use crate::runtime::interpreter::RuntimeException;
 pub use crate::runtime::value::Value;
 pub use crate::runtime::instance::Instance;
+use crate::scanner::StringInContext;
 pub use crate::source_ref::SourceRef;
 
 pub(crate) mod interpreter;
@@ -8,12 +9,11 @@ pub(crate) mod value;
 pub(crate) mod func;
 pub(crate) mod instance;
 pub(crate) mod fast_env;
-pub(crate) mod env_allocator;
 
 pub trait Callable {
     fn arity(&self) -> u8;
     fn call(&self, args: Vec<Value>, callsite: SourceRef) -> Result<Value, RuntimeException>;
-    fn name(&self) -> &str;
+    fn name(&self) -> &StringInContext;
 }
 
 pub fn is_equal(left: &Value, right: &Value, context: &SourceRef) -> Result<bool, RuntimeException> {

@@ -26,7 +26,7 @@ impl FastEnv {
     }
     pub fn declare(&mut self, key: usize, name: &str, value: &Value) {
         let mut inner = self.inner.borrow_mut();
-        if (key < inner.values.len()) {
+        if key < inner.values.len() {
             inner.values[key] = value.clone();
         } else {
             panic!("Compiler error - resolution error: len {}, offset: {}, name: {}", inner.values.len(), key, name)
@@ -45,7 +45,7 @@ impl FastEnv {
         }
     }
     pub fn fetch(&self, key: &str, scope: usize, offset: usize, context: &SourceRef) -> Result<Value, RuntimeException> {
-        let mut inner = self.inner.borrow();
+        let inner = self.inner.borrow();
         if scope == 0 {
             Ok(inner.values[offset].clone())
         } else {

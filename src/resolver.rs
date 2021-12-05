@@ -3,8 +3,9 @@ use crate::parser::{ParserFunc, Stmt, ExprTy, Expr};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use crate::source_ref::{SourceRef};
-use crate::{Callable};
+use crate::{Callable, StringInContext};
 use serde::Serialize;
+
 pub type ResolverResult = Result<(), ResolverError>;
 
 pub struct ResolverError {
@@ -68,26 +69,26 @@ impl Resolver {
     fn end_scope(&mut self) {
         self.scopes.pop();
     }
-    fn declare(&mut self, name: &str) {
+    fn declare(&mut self, name: &StringInContext) {
         // // println!("Declare {} at scope {}", name, self.scopes.len() - 1);
         let last_size = self.last_size();
         if let Some(scope) = self.scopes.last_mut() {
             // println!("declare {} at offset{}", name, last_size);
-            match scope.get(name) {
-                None => scope.insert(name.to_string(), (last_size, false)),
-                Some((offset, bool)) => scope.insert(name.to_string(), (*offset, false)),
+            match scope.get(&name.string) {
+                None => scope.insert(name.string.to_string(), (last_size, false)),
+                Some((offset, bool)) => scope.insert(name.string.to_string(), (*offset, false)),
             };
         }
     }
-    fn define(&mut self, name: &str) {
+    fn define(&mut self, name: &StringInContext) {
         // // println!("Define {} at scope {}", name, self.scopes.len() - 1);
         let last_size = self.last_size();
         if let Some(scope) = self.scopes.last_mut() {
             // println!("define {} at offset{}", name, last_size);
             // scope.insert(name.to_string(), (last_size, true));
-            match scope.get(name) {
-                None => scope.insert(name.to_string(), (last_size, true)),
-                Some((offset, bool)) => scope.insert(name.to_string(), (*offset, true)),
+            match scope.get(&name.string) {
+                None => scope.insert(name.string.to_string(), (last_size, true)),
+                Some((offset, bool)) => scope.insert(name.string.to_string(), (*offset, true)),
             };
         }
     }
@@ -96,12 +97,12 @@ impl Resolver {
         self.scopes.last().unwrap().len()
     }
 
-    fn resolve_local(&mut self, name: &str, resolved: &mut Option<Resolved>, context: &SourceRef) -> ResolverResult {
+    fn resolve_local(&mut self, name: &StringInContext, resolved: &mut Option<Resolved>) -> ResolverResult {
         if self.scopes.len() == 0 {
             return Ok(());
         }
         for i in (0..(self.scopes.len())).rev() {
-            if let Some((offset, defined)) = self.scopes[i].get(name) {
+            if let Some((offset, defined)) = self.scopes[i].get(&name.string) {
                 let res = Resolved {
                     scope: (self.scopes.len() - 1) - i,
                     offset: *offset,
@@ -112,8 +113,8 @@ impl Resolver {
             }
         }
         if let None = resolved {
-            if name != "clock" {
-                return Err(ResolverError::new(format!("Variable {} was never defined", name), context));
+            if name.string != "clock" {
+                return Err(ResolverError::new(format!("Variable {} was never defined", name.string), &name.context));
             }
         }
         Ok(())
@@ -141,7 +142,7 @@ impl Resolver {
                     self.resolve_expr(expr)?;
                 }
                 self.define(name);
-                self.resolve_local(name, resolved, context)?;
+                self.resolve_local(name, resolved)?;
             }
             Stmt::If(test, if_branch, else_branch) => {
                 self.resolve_expr(test)?;
@@ -161,7 +162,7 @@ impl Resolver {
             Stmt::Function(func, resolved) => {
                 self.declare(func.name());
                 self.define(func.name());
-                self.resolve_local(func.name(), resolved, &func.inner.name_context.clone())?;
+                self.resolve_local(func.name(), resolved)?;
                 self.resolve_func(func)?;
             }
             Stmt::Return(expr, _context) => {
@@ -172,7 +173,7 @@ impl Resolver {
             Stmt::Class(class, resolved, scope_size) => {
                 let enclosing = self.current_class.clone();
                 self.current_class = ClassType::Class;
-                self.declare(class.name().clone());
+                self.declare(&class.name().clone());
                 self.begin_scope();
                 let last = self.scopes.last_mut().unwrap();
                 last.insert("this".to_string(), (last.len(), true));
@@ -182,7 +183,7 @@ impl Resolver {
                 scope_size.insert(self.last_size());
                 self.end_scope();
                 self.define(class.name());
-                self.resolve_local(class.name(), resolved, &class.context())?;
+                self.resolve_local(class.name(), resolved)?;
 
                 self.current_class = enclosing;
             }
@@ -209,7 +210,7 @@ impl Resolver {
                 if let ClassType::None = self.current_class {
                     return Err(ResolverError::new("Cannot use `this` outside a class".to_string(), &expr.context));
                 }
-                self.resolve_local("this", resolved, &expr.context)?;
+                self.resolve_local(&StringInContext::new(format!("this"), expr.context.clone()), resolved)?;
             }
             Expr::Binary(left, _op, right) => {
                 self.resolve_expr(left)?;
@@ -230,17 +231,17 @@ impl Resolver {
             }
             Expr::Variable(var, resolved) => {
                 if let Some(scope) = self.scopes.last() {
-                    if let Some((_offset, defined)) = scope.get(var) {
+                    if let Some((_offset, defined)) = scope.get(&var.string) {
                         if !defined {
                             return Err(ResolverError::new("Can't read local variable in its own initializer.".to_string(), &expr.context));
                         }
                     }
                 }
-                self.resolve_local(var, resolved, &expr.context)?;
+                self.resolve_local(var, resolved)?;
             }
             Expr::Assign(name, value, resolved) => {
                 self.resolve_expr(value)?;
-                self.resolve_local(name, resolved, &expr.context)?;
+                self.resolve_local(name, resolved)?;
             }
             Expr::Logical(left, _op, right) => {
                 self.resolve_expr(left)?;

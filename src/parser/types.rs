@@ -1,4 +1,4 @@
-use crate::scanner::{Token, TokenInContext};
+use crate::scanner::{StringInContext, Token, TokenInContext};
 use crate::scanner::Token::{MINUS, AND, OR, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, PLUS, SLASH, MULT, BANG_EQUAL, EQUAL_EQUAL};
 use crate::source_ref::SourceRef;
 use std::fmt::{Debug, Formatter};
@@ -47,7 +47,7 @@ pub enum Stmt {
     Expr(ExprTy),
     Block(Box<Vec<Stmt>>, Option<ScopeSize>),
     Print(ExprTy),
-    Variable(String, Option<ExprTy>, Option<Resolved>, SourceRef),
+    Variable(StringInContext, Option<ExprTy>, Option<Resolved>, SourceRef),
     If(ExprTy, Box<Stmt>, Option<Box<Stmt>>),
     While(ExprTy, Box<Stmt>, Option<ScopeSize>),
     Function(ParserFunc, Option<Resolved>),
@@ -67,12 +67,12 @@ pub enum Expr {
     Binary(ExprTy, BinOp, ExprTy),
     Call(ExprTy, Vec<ExprTy>),
     Grouping(ExprTy),
-    Get(ExprTy, String),
+    Get(ExprTy, StringInContext),
     Literal(crate::runtime::Value),
     Unary(UnaryOp, ExprTy),
-    Set(ExprTy, String, ExprTy),
-    Variable(String, Option<Resolved>),
-    Assign(String, ExprTy, Option<Resolved>),
+    Set(ExprTy, StringInContext, ExprTy),
+    Variable(StringInContext, Option<Resolved>),
+    Assign(StringInContext, ExprTy, Option<Resolved>),
     Logical(ExprTy, LogicalOp, ExprTy),
     This(Option<Resolved>),
 }

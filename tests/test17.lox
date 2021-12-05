@@ -1,0 +1,13 @@
+class Test {
+    init() {
+        this.a = "a";
+        this.b = "b";
+        this.field = "nate";
+    }
+    printMe(name) {
+        print("I cant do that " + name + " I am " + this.field);
+    }
+}
+
+var t = Test();
+t.printMe("Dave");

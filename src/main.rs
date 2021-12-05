@@ -19,9 +19,17 @@ use crate::runtime::{Callable, Value};
 use std::time::{SystemTime, UNIX_EPOCH};
 use crate::resolver::{resolve};
 use crate::runtime::fast_env::FastEnv;
+use crate::scanner::StringInContext;
 
 #[derive(Clone, Debug)]
-struct ClockRuntimeFunc {}
+struct ClockRuntimeFunc {
+    src: StringInContext
+}
+impl ClockRuntimeFunc {
+    pub fn new() -> ClockRuntimeFunc {
+        ClockRuntimeFunc { src: StringInContext::new("clock".to_string(), SourceRef::simple()) }
+    }
+}
 
 impl Callable for ClockRuntimeFunc {
     fn arity(&self) -> u8 {
@@ -34,7 +42,7 @@ impl Callable for ClockRuntimeFunc {
         };
         Ok(Value::NUMBER(t.as_secs_f64() * 1000.0))
     }
-    fn name(&self) -> &str { "clock" }
+    fn name(&self) -> &StringInContext { &self.src }
 }
 
 struct Lox {
@@ -46,7 +54,7 @@ struct Lox {
 impl Lox {
     fn new() -> Lox {
         let mut globals = FastEnv::new(None, 1);
-        let clock = Value::FUNC(Rc::new(ClockRuntimeFunc {}));
+        let clock = Value::FUNC(Rc::new(ClockRuntimeFunc::new()));
         globals.declare(0, "clock", &clock);
 
         return Lox {

@@ -9,6 +9,7 @@ use crate::runtime::func::Func;
 use crate::runtime::instance::Instance;
 use crate::runtime::value::Value;
 use crate::runtime::interpreter::RuntimeException;
+use crate::scanner::StringInContext;
 
 #[derive(Clone, serde::Serialize, Debug)]
 pub struct Class {
@@ -18,7 +19,7 @@ pub struct Class {
 
 #[derive(serde::Serialize, Debug)]
 pub struct ClassInner {
-    name: String,
+    name: StringInContext,
     #[serde(skip_serializing)]
     context: SourceRef,
     pub methods: RefCell<Vec<ParserFunc>>,
@@ -27,7 +28,7 @@ pub struct ClassInner {
 }
 
 impl Class {
-    pub fn new(name: String, context: SourceRef, methods: Vec<ParserFunc>) -> Class {
+    pub fn new(name: StringInContext, context: SourceRef, methods: Vec<ParserFunc>) -> Class {
         Class { inner: Rc::new(ClassInner { name, context, methods: RefCell::new(methods), runtime_methods: RefCell::new(HashMap::new()) }) }
     }
     pub fn context(&self) -> SourceRef {
@@ -40,10 +41,14 @@ impl Callable for Class {
         0
     }
 
-    fn call(&self, _args: Vec<Value>, _callsite: SourceRef) -> Result<Value, RuntimeException> {
-        Ok(Value::INSTANCE(Instance::new(self.clone())))
+    fn call(&self, _args: Vec<Value>, callsite: SourceRef) -> Result<Value, RuntimeException> {
+        let inst = Instance::new(self.clone());
+        if let Some(bound_method) = inst.find_method("init", &callsite) {
+            bound_method.call(vec![], callsite)?;
+        }
+        Ok(Value::INSTANCE(inst))
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> &StringInContext {
         &self.inner.name
     }
 }

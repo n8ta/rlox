@@ -4,6 +4,7 @@ use std::rc::Rc;
 use crate::runtime::value::Value;
 use crate::parser::Class;
 use crate::{Callable, RuntimeException, SourceRef};
+use crate::runtime::func::Func;
 
 #[derive(Clone, serde::Serialize, Debug)]
 pub struct Instance {
@@ -16,32 +17,34 @@ impl Instance {
         Instance { class, fields: Rc::new(RefCell::new(HashMap::new())) }
     }
     pub fn name(&self) -> &str {
-        self.class.name()
+        &self.class.name().string
     }
 
-    pub fn find_methods(&self, method: &str, _context: &SourceRef) -> Value {
-        match self.class.inner.runtime_methods.borrow_mut().get(method) {
-            None => Value::NIL,
-            Some(func)  => Value::FUNC(Rc::new(func.clone())),
+    pub fn find_method(&self, method: &str, _context: &SourceRef) -> Option<Func> {
+        match self.class.inner.runtime_methods.borrow().get(method) {
+            None => None,
+            Some(func)  => {
+                let bound_method = func.clone().bind(&self);
+                Some(bound_method)
+            },
         }
     }
 
     pub fn get(&self, field: &str, context: &SourceRef) -> Result<Value, RuntimeException> {
-        let fields = self.fields.borrow_mut();
-        let methods = self.class.inner.runtime_methods.borrow_mut();
+        let fields = self.fields.borrow();
+        let methods = self.class.inner.runtime_methods.borrow();
 
         match fields.get(field) {
             None => {
-                match methods.get(field) {
+                match self.find_method(field, context) {
                     None => Err(RuntimeException::new(
                         format!("Unable to find '{}' on {} it has fields \"{}\" and methods \"{}\"",
                                 field,
-                                self.class.name(),
+                                &self.class.name().string,
                                 fields.iter().map(|(a, _b)| a.to_string()).collect::<Vec<String>>().join(", "),
                                 methods.iter().map(|(a, _b)| a.to_string()).collect::<Vec<String>>().join(", ")),
                                 context.clone())),
-                    Some(func) => {
-                        let bound_method = func.clone().bind(&self);
+                    Some(bound_method) => {
                         Ok(Value::FUNC(Rc::new(bound_method)))
                     }
                 }

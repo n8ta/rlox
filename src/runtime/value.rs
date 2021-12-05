@@ -36,9 +36,9 @@ impl Display for Value {
             Value::NUMBER(num) => f.write_str(&format!("{}", num)),
             Value::BOOL(bool) => f.write_str(if *bool { "true" } else { "false" }),
             Value::NIL => f.write_str("NIL"),
-            Value::FUNC(func) => f.write_str(&format!("func<{}>", func.name())),
+            Value::FUNC(func) => f.write_str(&format!("func<{}>", func.name().string)),
             Value::INSTANCE(i) => f.write_str(&format!("instance<{}>", i.name())),
-            Value::CLASS(c) => f.write_str(&format!("class<{}>", c.name())),
+            Value::CLASS(c) => f.write_str(&format!("class<{}>", c.name().string)),
         }
     }
 }

@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use crate::{Callable, SourceRef};
+use crate::{Callable, SourceRef, StringInContext};
 use crate::parser::ParserFunc;
 use crate::runtime::fast_env::FastEnv;
 use crate::runtime::Instance;
@@ -39,7 +39,7 @@ impl Callable for Func {
         let size = self.inner.func.inner.scope_size.borrow().unwrap();
         let mut new_env = FastEnv::new(Some(self.inner.env.clone()), size);
         for i in 0..self.inner.func.inner.args.len() {
-            new_env.declare(i, &self.inner.func.inner.args[0].0, &args[i]);
+            new_env.declare(i, &self.inner.func.inner.args[0].0.string, &args[i]);
         }
         match interpret(&self.inner.func.inner.body.borrow(), new_env, self.inner.globals.clone()) {
             Ok(lit) => Ok(lit),
@@ -49,7 +49,7 @@ impl Callable for Func {
             }
         }
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> &StringInContext {
         &self.inner.func.inner.name
     }
 }
