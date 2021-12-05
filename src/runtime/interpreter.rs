@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::parser::{ExprTy, Expr, UnaryOp, Stmt, LogicalOp};
 use crate::parser::BinOp::{EQUAL_EQUAL, BANG_EQUAL, PLUS, SLASH, MINUS, MULT, GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, AND, OR};
 use crate::source_ref::SourceRef;
@@ -11,6 +12,7 @@ use crate::Value::NIL;
 use crate::Callable;
 use crate::LoxControlFlow::CFRuntime;
 use crate::resolver::{Resolved};
+use crate::runtime::class::RtClass;
 
 #[derive(Clone, Debug, PartialOrd, PartialEq, Eq, Ord)]
 pub struct RuntimeException {
@@ -80,12 +82,37 @@ impl Interpreter {
             Stmt::Class(class, resolution, _scope_size) => {
                 let resolution = resolution.as_ref().unwrap();
                 self.env.declare(resolution.offset, &class.name().string, &Value::NIL);
-                let class_runtime = Value::CLASS(class.clone());
-                let mut rt_methods = class.inner.runtime_methods.borrow_mut();
+
+                // Create runtime methods that are bound to the current local scope
+                let mut methods = HashMap::new();
                 for method in class.inner.methods.borrow().iter() {
                     let func = Func::new(method.clone(), self.env.clone(), self.globals.clone());
-                    rt_methods.insert(func.name().string.to_string(), func);
+                    methods.insert(func.name().string.to_string(), func);
                 }
+                // Resolve super class
+                let super_class =
+                    if let Some(super_class) = &class.inner.super_class {
+                        let super_class = super_class.borrow();
+                        if let Expr::Variable(_) = &super_class.parent.expr {
+                        } else {
+                            panic!("Compiler bug, super class must be a variable expression");
+                        }
+                        let super_class_value = self.execute_expr(&super_class.parent)?;
+                        if let Value::CLASS(rtclass) = super_class_value {
+                            Some(rtclass.clone())
+                        } else {
+                            return Err(LoxControlFlow::CFRuntime(RuntimeException::new(
+                                format!("Class '{}' had a super class '{}' that resolved to be a {} instead of another class",
+                                        class.name().string,
+                                        super_class.name,
+                                        super_class_value.tname()),
+                                class.context(),
+                            )));
+                        }
+                    } else {
+                        None
+                    };
+                let class_runtime = Value::CLASS(RtClass::new(class.clone(), methods, super_class));
                 self.env.assign(&class.name().string, resolution.scope, resolution.offset, &class_runtime, &class.context())?;
             }
             Stmt::Block(block_stmts, scope_size) => {

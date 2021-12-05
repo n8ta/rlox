@@ -3,12 +3,12 @@ use std::rc::Rc;
 use crate::resolver::ScopeSize;
 use crate::{RuntimeException, SourceRef, Value};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize)]
 pub struct FastEnv {
     inner: Rc<RefCell<FastEnvInner>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 struct FastEnvInner {
     values: Vec<Value>,
     parent: Option<FastEnv>,

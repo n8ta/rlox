@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
 use crate::{Callable, Source, SourceRef};
-use crate::parser::Class;
+use crate::runtime::class::RtClass;
 use crate::runtime::instance::Instance;
 use crate::runtime::is_equal;
 
@@ -16,7 +16,7 @@ pub enum Value {
     #[serde(skip_serializing)]
     FUNC(Rc<dyn Callable>),
     INSTANCE(Instance),
-    CLASS(Class),
+    CLASS(RtClass),
 }
 
 impl PartialEq for Value {

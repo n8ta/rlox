@@ -1,12 +1,7 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
-use crate::{Callable, SourceRef};
+use crate::{SourceRef};
 use crate::parser::{ExprTy, ParserFunc};
-use crate::runtime::func::Func;
-use crate::runtime::instance::Instance;
-use crate::runtime::value::Value;
-use crate::runtime::interpreter::RuntimeException;
 use crate::scanner::StringInContext;
 
 #[derive(Clone, serde::Serialize, Debug)]
@@ -20,8 +15,7 @@ pub struct ClassInner {
     name: StringInContext,
     pub methods: RefCell<Vec<ParserFunc>>,
     #[serde(skip_serializing)]
-    pub runtime_methods: RefCell<HashMap<String, Func>>,
-    pub super_class: Option<RefCell<SuperClass>>, // Expr::Variable only
+    pub super_class: Option<RefCell<SuperClass>>,
 }
 
 #[derive(serde::Serialize, Debug)]
@@ -36,26 +30,12 @@ impl SuperClass {
 
 impl Class {
     pub fn new(name: StringInContext, methods: Vec<ParserFunc>, super_class: Option<RefCell<SuperClass>>) -> Class {
-        Class { inner: Rc::new(ClassInner { super_class, name, methods: RefCell::new(methods), runtime_methods: RefCell::new(HashMap::new()) }) }
+        Class { inner: Rc::new(ClassInner { super_class, name, methods: RefCell::new(methods) }) }
     }
     pub fn context(&self) -> SourceRef {
         self.inner.name.context.clone()
     }
-}
-
-impl Callable for Class {
-    fn arity(&self) -> u8 {
-        0
-    }
-
-    fn call(&self, _args: Vec<Value>, callsite: SourceRef) -> Result<Value, RuntimeException> {
-        let inst = Instance::new(self.clone());
-        if let Some(bound_method) = inst.find_method("init", &callsite) {
-            bound_method.call(vec![], callsite)?;
-        }
-        Ok(Value::INSTANCE(inst))
-    }
-    fn name(&self) -> &StringInContext {
+    pub fn name(&self) -> &StringInContext {
         &self.inner.name
     }
 }

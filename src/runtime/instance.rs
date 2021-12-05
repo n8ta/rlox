@@ -2,18 +2,18 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use crate::runtime::value::Value;
-use crate::parser::Class;
 use crate::{Callable, RuntimeException, SourceRef};
+use crate::runtime::class::RtClass;
 use crate::runtime::func::Func;
 
 #[derive(Clone, serde::Serialize, Debug)]
 pub struct Instance {
-    pub class: Class,
+    pub class: RtClass,
     fields: Rc<RefCell<HashMap<String, Value>>>,
 }
 
 impl Instance {
-    pub fn new(class: Class) -> Instance {
+    pub fn new(class: RtClass) -> Instance {
         Instance { class, fields: Rc::new(RefCell::new(HashMap::new())) }
     }
     pub fn name(&self) -> &str {
@@ -21,7 +21,7 @@ impl Instance {
     }
 
     pub fn find_method(&self, method: &str, _context: &SourceRef) -> Option<Func> {
-        match self.class.inner.runtime_methods.borrow().get(method) {
+        match self.class.inner.methods.get(method) {
             None => None,
             Some(func)  => {
                 let bound_method = func.clone().bind(&self);
@@ -32,7 +32,7 @@ impl Instance {
 
     pub fn get(&self, field: &str, context: &SourceRef) -> Result<Value, RuntimeException> {
         let fields = self.fields.borrow();
-        let methods = self.class.inner.runtime_methods.borrow();
+        let methods = &self.class.inner.methods;
 
         match fields.get(field) {
             None => {

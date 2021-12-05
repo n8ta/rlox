@@ -7,7 +7,7 @@ use crate::runtime::interpreter::{interpret, LoxControlFlow, RuntimeException};
 use crate::runtime::value::Value;
 
 /// Runtime Representation of a Func
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize)]
 pub struct Func {
     inner: Rc<FuncInner>,
 }
@@ -24,7 +24,7 @@ impl Func {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize)]
 struct FuncInner {
     func: ParserFunc,
     env: FastEnv,

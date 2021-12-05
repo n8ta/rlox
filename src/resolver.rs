@@ -2,7 +2,7 @@ use crate::parser::{ParserFunc, Stmt, ExprTy, Expr};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use crate::source_ref::{SourceRef};
-use crate::{Callable, StringInContext};
+use crate::{StringInContext};
 
 pub type ResolverResult = Result<(), ResolverError>;
 
