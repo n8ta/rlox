@@ -18,11 +18,15 @@ use crate::runtime::class::RtClass;
 pub struct RuntimeException {
     pub msg: String,
     pub context: SourceRef,
+    pub context2: Option<SourceRef>,
 }
 
 impl RuntimeException {
     pub fn new(msg: String, context: SourceRef) -> RuntimeException {
-        RuntimeException { msg, context }
+        RuntimeException { msg, context, context2: None }
+    }
+    pub fn new2(msg: String, context: SourceRef, context2: SourceRef) -> RuntimeException {
+        RuntimeException { msg, context, context2: Some(context2) }
     }
 }
 
@@ -297,9 +301,9 @@ impl Interpreter {
                     evaluated_args.push(self.execute_expr(arg)?)
                 }
                 if let Value::FUNC(func) = func {
-                    Ok(func.call(evaluated_args, callee.context.clone())?)
+                    Ok(func.call(evaluated_args, &callee.context)?)
                 } else if let Value::CLASS(class) = func {
-                    Ok(class.call(evaluated_args, callee.context.clone())?)
+                    Ok(class.call(evaluated_args, &callee.context)?)
                 } else {
                     Err(RuntimeException::new(format!("Cannot call a {}", func.tname()), callee.context.clone()).into())
                 }

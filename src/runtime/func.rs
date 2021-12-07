@@ -35,11 +35,18 @@ impl Callable for Func {
     fn arity(&self) -> u8 {
         self.inner.func.inner.args.len() as u8
     }
-    fn call(&self, args: Vec<Value>, _callsite: SourceRef) -> Result<Value, RuntimeException> {
+    fn call(&self, args: Vec<Value>, callsite: &SourceRef) -> Result<Value, RuntimeException> {
+        let expected_args = self.inner.func.inner.args.len();
+        if args.len() != expected_args {
+            return Err(RuntimeException::new2(
+                format!("Function {} has {} args but you passed {}", self.name().string, expected_args, args.len()),
+                callsite.clone(),
+                self.inner.func.inner.context.clone()));
+        }
         let size = self.inner.func.inner.scope_size.borrow().unwrap();
         let mut new_env = FastEnv::new(Some(self.inner.env.clone()), size);
-        for i in 0..self.inner.func.inner.args.len() {
-            new_env.declare(i, &self.inner.func.inner.args[0].0.string, &args[i]);
+        for (i, (arg, src)) in self.inner.func.inner.args.iter().enumerate() {
+            new_env.declare(i, &arg.string, &args[i]);
         }
         match interpret(&self.inner.func.inner.body.borrow(), new_env, self.inner.globals.clone()) {
             Ok(lit) => Ok(lit),

@@ -19,16 +19,18 @@ pub struct ParserFuncInner {
     pub body: RefCell<Stmt>,
     #[serde(skip_serializing)]
     pub name_context: SourceRef,
+    #[serde(skip_serializing)]
+    pub context: SourceRef,
 }
 impl ParserFuncInner {
-    fn new(name: StringInContext, args: Vec<(StringInContext, SourceRef)>, body: Stmt, name_context: SourceRef) -> ParserFuncInner {
-        ParserFuncInner { name, args, body: RefCell::new(body), name_context, scope_size: RefCell::new(None) }
+    fn new(name: StringInContext, args: Vec<(StringInContext, SourceRef)>, body: Stmt, name_context: SourceRef, context: SourceRef) -> ParserFuncInner {
+        ParserFuncInner { name, args, body: RefCell::new(body), name_context, scope_size: RefCell::new(None), context }
     }
 }
 
 impl ParserFunc {
-    pub fn new(name: StringInContext, args: Vec<(StringInContext, SourceRef)>, body: Stmt, name_context: SourceRef) -> ParserFunc {
-        ParserFunc { inner: Rc::new(ParserFuncInner::new(name, args, body, name_context)) }
+    pub fn new(name: StringInContext, args: Vec<(StringInContext, SourceRef)>, body: Stmt, name_context: SourceRef, context: SourceRef) -> ParserFunc {
+        ParserFunc { inner: Rc::new(ParserFuncInner::new(name, args, body, name_context, context)) }
     }
     pub fn name(&self) -> &StringInContext {
         &self.inner.name

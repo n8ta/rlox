@@ -28,6 +28,7 @@ pub struct Resolved {
 enum ClassType {
     None,
     Class,
+    SubClass,
 }
 
 impl Display for ResolverError {
@@ -176,7 +177,11 @@ impl Resolver {
                 }
 
                 let enclosing = self.current_class.clone();
-                self.current_class = ClassType::Class;
+                self.current_class = if let Some(_) = &class.inner.super_class {
+                    ClassType::SubClass
+                } else {
+                    ClassType::Class
+                };
                 self.declare(&class.name().clone());
 
                 if let Some(super_class_ref_cell) = &class.inner.super_class {
@@ -210,7 +215,6 @@ impl Resolver {
                 self.define(class.name());
 
 
-
                 self.current_class = enclosing;
             }
         }
@@ -233,8 +237,12 @@ impl Resolver {
 
     fn resolve_expr(&mut self, expr: &mut ExprTy) -> ResolverResult {
         match &mut expr.expr {
-            Expr::Super(method, resolved) => {
-                self.resolve_local(&StringInContext::new("super".to_string(), expr.context.clone()), resolved)?;
+            Expr::Super(_method, resolved) => {
+                if let ClassType::SubClass = self.current_class {
+                    self.resolve_local(&StringInContext::new("super".to_string(), expr.context.clone()), resolved)?;
+                } else {
+                    return Err(ResolverError::new(format!("Cannot use super outside of a sub class"), &expr.context));
+                }
             }
             Expr::This(resolved) => {
                 if let ClassType::None = self.current_class {

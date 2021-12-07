@@ -174,6 +174,7 @@ impl Parser {
 
     fn function(&mut self) -> Result<ParserFunc, ParserError> {
         let name_in_context = self.consume(ident(), "Expected a function name")?;
+        let mut context = name_in_context.context.clone();
         let name = if let Token::IDENTIFIER(str) = name_in_context.token { str } else {
             return Err(self.err(format!("Expected a function name")));
         };
@@ -202,15 +203,23 @@ impl Parser {
         }
 
         self.consume(RPAREN, "Expected a ')' after function parameters")?;
-        self.consume(LBRACE, "Expected a '{' after a function declaration")?;
+        let lbrace = self.consume(LBRACE, "Expected a '{' after a function declaration")?;
+
+        let mut context = name_in_context.context.merge(&lbrace.context);
+
         let body =
-            if let Stmt::Block(blk, _) = self.block()? {
+            if let(Stmt::Block(blk, _), rbrace) = self.block()? {
+                context = context.merge(&rbrace);
                 *blk
             } else {
                 panic!("block() didn't return a block");
             };
-
-        Ok(ParserFunc::new(name, params, Stmt::Block(Box::new(body), None), name_in_context.context.clone()))
+        Ok(ParserFunc::new(name,
+                           params,
+                           Stmt::Block(Box::new(body), None),
+                           name_in_context.context.clone(),
+                           context,
+        ))
     }
 
     fn variable_declaration(&mut self) -> Result<Stmt, ParserError> {
@@ -280,7 +289,7 @@ impl Parser {
         } else if self.matches(vec![Token::WHILE]) {
             self.while_statement()
         } else if self.matches(vec![Token::LBRACE]) {
-            self.block()
+            self.block().and_then(|s| Ok(s.0))
         } else if self.matches(vec![Token::IF]) {
             self.if_statement()
         } else if self.matches(vec![Token::FOR]) {
@@ -356,13 +365,13 @@ impl Parser {
         Ok(body)
     }
 
-    fn block(&mut self) -> Result<Stmt, ParserError> {
+    fn block(&mut self) -> Result<(Stmt, SourceRef), ParserError> {
         let mut stmts: Vec<Stmt> = vec![];
         while !self.check(Token::RBRACE) && !self.is_at_end() {
             stmts.push(self.declaration()?)
         }
-        self.consume(Token::RBRACE, "Expected block to end with an '}'.")?;
-        Ok(Stmt::Block(Box::new(stmts), None))
+        let rbrace = self.consume(Token::RBRACE, "Expected block to end with an '}'.")?;
+        Ok((Stmt::Block(Box::new(stmts), None), rbrace.context))
     }
 
     fn print_statement(&mut self) -> Result<Stmt, ParserError> {
@@ -522,8 +531,7 @@ impl Parser {
                 self.consume(Token::DOT, "Expected a '.' after the super keyword")?;
                 let method = self.consume(Token::IDENTIFIER(StringInContext::simple()), "Expected to see a method name after super")?;
                 if let Token::IDENTIFIER(method) = method.token {
-                    let method_context = method.context.clone();
-                    return Ok(mk_expr(Expr::Super(method, None), src.merge(&method_context) ))
+                    return Ok(mk_expr(Expr::Super(method, None), src));
                 } else {
                     panic!("Compiler error")
                 }

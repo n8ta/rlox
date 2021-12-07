@@ -24,10 +24,10 @@ impl Callable for RtClass {
         0
     }
 
-    fn call(&self, _args: Vec<Value>, callsite: SourceRef) -> Result<Value, RuntimeException> {
+    fn call(&self, args: Vec<Value>, callsite: &SourceRef) -> Result<Value, RuntimeException> {
         let inst = Instance::new(self.clone());
         if let Some(bound_method) = inst.find_method("init", &callsite) {
-            bound_method.call(vec![], callsite)?;
+            bound_method.call(args, callsite)?;
         }
         Ok(Value::INSTANCE(inst))
     }

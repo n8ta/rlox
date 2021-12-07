@@ -13,7 +13,7 @@ pub(crate) mod class;
 
 pub trait Callable {
     fn arity(&self) -> u8;
-    fn call(&self, args: Vec<Value>, callsite: SourceRef) -> Result<Value, RuntimeException>;
+    fn call(&self, args: Vec<Value>, callsite: &SourceRef) -> Result<Value, RuntimeException>;
     fn name(&self) -> &StringInContext;
 }
 
@@ -23,6 +23,7 @@ pub fn is_equal(left: &Value, right: &Value, context: &SourceRef) -> Result<bool
         (Value::NUMBER(left), Value::NUMBER(right)) => Ok(left == right),
         (Value::BOOL(left), Value::BOOL(right)) => Ok(left == right),
         (Value::NIL, Value::NIL) => Ok(true),
-        _ => Err(RuntimeException::new(format!("Cannot compare {} and {}", left, right), context.clone()))
+        _ => Ok(false),
+        // _ => Err(RuntimeException::new(format!("Cannot compare {} and {}", left, right), context.clone()))
     }
 }

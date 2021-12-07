@@ -1,0 +1,7 @@
+class Test {
+    init(a) {
+        print(a);
+    }
+}
+var t = Test(1);
+t.init();

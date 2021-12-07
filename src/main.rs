@@ -34,10 +34,10 @@ impl Callable for ClockRuntimeFunc {
     fn arity(&self) -> u8 {
         0
     }
-    fn call(&self, _args: Vec<Value>, context: SourceRef) -> Result<Value, RuntimeException> {
+    fn call(&self, _args: Vec<Value>, context: &SourceRef) -> Result<Value, RuntimeException> {
         let t = match SystemTime::now().duration_since(UNIX_EPOCH) {
             Ok(t) => t,
-            Err(_) => return Err(RuntimeException::new(format!("Unable to determine system time."), context))
+            Err(_) => return Err(RuntimeException::new(format!("Unable to determine system time."), context.clone()))
         };
         Ok(Value::NUMBER(t.as_secs_f64() * 1000.0))
     }
@@ -123,7 +123,12 @@ impl Lox {
         if let Err(err) = interpret(&ast, FastEnv::new(None, 0), self.globals.clone()) {
             match err {
                 LoxControlFlow::CFRuntime(err) => {
-                    eprintln!("[line:{}] Error: {}\n{}", err.context.line + 1, &err.msg, err.context)
+                    if let Some(context2) = err.context2 {
+                        eprintln!("[line:{}] Error: {}\n{}\n\n{}", err.context.line + 1, &err.msg, err.context, context2)
+                    } else {
+                        eprintln!("[line:{}] Error: {}\n{}", err.context.line + 1, &err.msg, err.context)
+                    }
+
                 }
                 LoxControlFlow::CFReturn(value, context) => {
                     eprintln!("[line:{}] Error: no function to return from! (value was {})\n{}", context.line, value, context)
