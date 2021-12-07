@@ -35,7 +35,12 @@ impl FastEnv {
     pub fn assign(&mut self, key: &str, scope: usize, offset: usize, value: &Value, context: &SourceRef) -> Result<(), RuntimeException> {
         let mut inner = self.inner.borrow_mut();
         if scope == 0 {
-            inner.values[offset] = value.clone();
+            if (offset < inner.values.len()) {
+                inner.values[offset] = value.clone();
+            } else {
+                panic!("Compiler bug - could not assign {} at scope {} offset {}", key, scope, offset);
+            }
+
             Ok(())
         } else {
             match &mut inner.parent {

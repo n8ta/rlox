@@ -168,7 +168,7 @@ impl Resolver {
                 }
             }
             Stmt::Class(class, resolved, scope_size) => {
-
+                // Make sure class isn't inheriting itself
                 if let Some(super_class) = &class.inner.super_class {
                     if super_class.borrow().name == class.name().string {
                         return Err(ResolverError::new(format!("Class {} cannot inherit from itself", super_class.borrow().name), &class.context()));
@@ -180,21 +180,36 @@ impl Resolver {
                 self.declare(&class.name().clone());
 
                 if let Some(super_class_ref_cell) = &class.inner.super_class {
+                    // resolved the superclass into a variable reference
                     let mut ref_mut = super_class_ref_cell.borrow_mut();
                     self.resolve_expr(&mut ref_mut.parent)?;
+
+                    // open scope to be used only for the 'super' keyword
+                    self.begin_scope();
+                    self.scopes.last_mut().unwrap().insert("super".to_string(), (0, true));
                 }
 
+                // Open scope for 'this'
                 self.begin_scope();
                 let last = self.scopes.last_mut().unwrap();
                 last.insert("this".to_string(), (last.len(), true));
                 for m in class.inner.methods.borrow_mut().iter_mut() {
                     self.resolve_func(m)?;
                 }
+                // Close the scope for 'this'
                 scope_size.insert(self.last_size());
                 self.end_scope();
-                self.define(class.name());
+
+
+                // Close scope we opened for 'super' if we opened
+                if let Some(_super) = &class.inner.super_class {
+                    self.end_scope()
+                }
 
                 self.resolve_local(class.name(), resolved)?;
+                self.define(class.name());
+
+
 
                 self.current_class = enclosing;
             }
@@ -218,6 +233,9 @@ impl Resolver {
 
     fn resolve_expr(&mut self, expr: &mut ExprTy) -> ResolverResult {
         match &mut expr.expr {
+            Expr::Super(method, resolved) => {
+                self.resolve_local(&StringInContext::new("super".to_string(), expr.context.clone()), resolved)?;
+            }
             Expr::This(resolved) => {
                 if let ClassType::None = self.current_class {
                     return Err(ResolverError::new("Cannot use `this` outside a class".to_string(), &expr.context));

@@ -9,4 +9,4 @@ class Test < Super {
     }
 }
 var t = Test();
-t.printMe("Nate");
+t.printMe("Nate, you are doing an amazing job!");

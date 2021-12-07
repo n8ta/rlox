@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use crate::runtime::func::Func;
 use crate::{Callable, RuntimeException, SourceRef, StringInContext, Value};
-use crate::parser::Class;
+use crate::parser::{Class};
+use crate::resolver::Resolved;
 use crate::runtime::Instance;
 
 #[derive(Clone, serde::Serialize, Debug)]
@@ -37,6 +38,15 @@ impl Callable for RtClass {
 
 impl RtClass {
     pub fn new(class: Class, methods: HashMap<String, Func>, super_class: Option<RtClass>) -> RtClass {
-        RtClass { inner: Rc::new(RtClassInner { class, methods, super_class })}
+        RtClass { inner: Rc::new(RtClassInner { class, methods, super_class }) }
+    }
+    pub fn find_method(&self, method: &str, context: &SourceRef) -> Result<Func, RuntimeException> {
+        if let Some(method) = self.inner.methods.get(method) {
+            Ok(method.clone())
+        } else if let Some(parent) = &self.inner.super_class {
+            parent.find_method(method, context)
+        } else {
+            Err(RuntimeException::new(format!("Couldn't find method '{}' on class '{}' and it has no super class", method, self.name().string), context.clone()))
+        }
     }
 }

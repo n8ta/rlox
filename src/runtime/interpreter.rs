@@ -83,18 +83,11 @@ impl Interpreter {
                 let resolution = resolution.as_ref().unwrap();
                 self.env.declare(resolution.offset, &class.name().string, &Value::NIL);
 
-                // Create runtime methods that are bound to the current local scope
-                let mut methods = HashMap::new();
-                for method in class.inner.methods.borrow().iter() {
-                    let func = Func::new(method.clone(), self.env.clone(), self.globals.clone());
-                    methods.insert(func.name().string.to_string(), func);
-                }
                 // Resolve super class
                 let super_class =
                     if let Some(super_class) = &class.inner.super_class {
                         let super_class = super_class.borrow();
-                        if let Expr::Variable(_) = &super_class.parent.expr {
-                        } else {
+                        if let Expr::Variable(_) = &super_class.parent.expr {} else {
                             panic!("Compiler bug, super class must be a variable expression");
                         }
                         let super_class_value = self.execute_expr(&super_class.parent)?;
@@ -112,6 +105,25 @@ impl Interpreter {
                     } else {
                         None
                     };
+
+
+                // Create runtime methods that are bound to the current local scope
+                // If there is a super class create a env with super defined, else just point to parent env
+                // resolver does the same.
+                let mut methods = HashMap::new();
+                let method_env = if let Some(super_class) = super_class.clone() {
+                    let mut env_w_super = FastEnv::new(Some(self.env.clone()), 1);
+                    env_w_super.declare(0, "super", &Value::CLASS(super_class));
+                    env_w_super
+                } else {
+                    self.env.clone()
+                };
+
+                for method in class.inner.methods.borrow().iter() {
+                    let func = Func::new(method.clone(), method_env.clone(), self.globals.clone());
+                    methods.insert(func.name().string.to_string(), func);
+                }
+
                 let class_runtime = Value::CLASS(RtClass::new(class.clone(), methods, super_class));
                 self.env.assign(&class.name().string, resolution.scope, resolution.offset, &class_runtime, &class.context())?;
             }
@@ -179,6 +191,27 @@ impl Interpreter {
 
     fn execute_expr(&mut self, expr: &ExprTy) -> InterpreterResult {
         match &expr.expr {
+            Expr::Super(method, resolved) => {
+                let scope = resolved.as_ref().unwrap().scope;
+                let offset = resolved.as_ref().unwrap().offset;
+                // super class value from env
+                let super_class = self.env.fetch("super", scope, offset, &method.context).or_else(|r| r.into())?;
+                // unwrap into actual Value::CLASS
+                let super_class = if let Value::CLASS(super_class) = super_class {
+                    super_class
+                } else {
+                    return Err(LoxControlFlow::CFRuntime(RuntimeException::new(format!("'super' resolved into something that was not a class"), expr.context.clone())));
+                };
+                let this = self.env.fetch("this", scope - 1, 0, &method.context)?;
+                let this = if let Value::INSTANCE(inst) = this {
+                    inst
+                } else {
+                    panic!("Compiler bug: tried to look up this in lexical scope 1 below super but found a {} instead of an instance", this.tname())
+                };
+
+                let method = super_class.find_method(&method.string, &method.context)?;
+                Ok(Value::FUNC(Rc::new(method.bind(&this))))
+            }
             Expr::This(resolved) => {
                 self.lookup_variable("this", resolved, &expr.context)
             }
@@ -277,7 +310,7 @@ impl Interpreter {
                     inst.get(&field.string, &expr.context).map_err(|e| e.into())
                 } else {
                     Err(RuntimeException::new(
-                        format!("Cannot use the class.get_property syntax on a non class instance"),
+                        format!("Cannot use the class.get_property syntax on a '{}' only on a class instance", obj.tname()),
                         expr.context.clone()).into())
                 }
             }

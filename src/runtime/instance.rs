@@ -20,13 +20,10 @@ impl Instance {
         &self.class.name().string
     }
 
-    pub fn find_method(&self, method: &str, _context: &SourceRef) -> Option<Func> {
-        match self.class.inner.methods.get(method) {
-            None => None,
-            Some(func)  => {
-                let bound_method = func.clone().bind(&self);
-                Some(bound_method)
-            },
+    pub fn find_method(&self, method: &str, context: &SourceRef) -> Option<Func> {
+        match self.class.find_method(method, context) {
+            Err(_) => None,
+            Ok(func)  => Some(func.bind(&self)),
         }
     }
 

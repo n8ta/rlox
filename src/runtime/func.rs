@@ -14,7 +14,7 @@ pub struct Func {
 
 
 impl Func {
-    pub(crate) fn new(func: ParserFunc, env: FastEnv, globals: FastEnv) -> Func {
+    pub fn new(func: ParserFunc, env: FastEnv, globals: FastEnv) -> Func {
         Func { inner: Rc::new(FuncInner { func, env, globals }) }
     }
     pub fn bind(self, inst: &Instance) -> crate::runtime::func::Func {

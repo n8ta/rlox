@@ -516,6 +516,22 @@ impl Parser {
                 panic!("compiler error");
             }
         }
+        if self.matches(vec![Token::SUPER]) {
+            let prev = self.previous().unwrap();
+            if let (Token::SUPER, src) = (prev.token, prev.context) {
+                self.consume(Token::DOT, "Expected a '.' after the super keyword")?;
+                let method = self.consume(Token::IDENTIFIER(StringInContext::simple()), "Expected to see a method name after super")?;
+                if let Token::IDENTIFIER(method) = method.token {
+                    let method_context = method.context.clone();
+                    return Ok(mk_expr(Expr::Super(method, None), src.merge(&method_context) ))
+                } else {
+                    panic!("Compiler error")
+                }
+            } else {
+                panic!("compiler error");
+            }
+        }
+
 
         if self.matches(vec![ident()]) {
             if let Token::IDENTIFIER(str) = self.previous().unwrap().token {

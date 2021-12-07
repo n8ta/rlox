@@ -70,6 +70,7 @@ pub enum Expr {
     Unary(UnaryOp, ExprTy),
     Set(ExprTy, StringInContext, ExprTy),
     Variable(Variable),
+    Super(StringInContext, Option<Resolved>),
     Assign(StringInContext, ExprTy, Option<Resolved>),
     Logical(ExprTy, LogicalOp, ExprTy),
     This(Option<Resolved>),
